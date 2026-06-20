@@ -425,7 +425,14 @@ function applyHit(h) {
   if (h.price != null) $('f_price').value = h.price;
   if (h.image) { currentImage = h.image; showPreview(currentImage); }
   // carry deck-legality metadata that has no visible form field
-  currentMeta = { cat: h.cat, noLimit: !!h.noLimit, basicPokemon: !!h.basicPokemon, aceSpec: !!h.aceSpec };
+  currentMeta = {
+    cat: h.cat,
+    noLimit: !!h.noLimit,
+    basicPokemon: !!h.basicPokemon,
+    aceSpec: !!h.aceSpec,
+    setCode: h.setCode || '',
+    number: h.number || ''
+  };
 }
 
 // --- Mappers: raw API card -> our hit shape (image = official art) ---
@@ -447,7 +454,9 @@ function mapMTG(c) {
     cat: tl.includes('land') ? 'land' : 'spell',
     noLimit: tl.includes('basic') && tl.includes('land'),
     basicPokemon: false,
-    aceSpec: false
+    aceSpec: false,
+    setCode: (c.set || '').toUpperCase(),
+    number: c.collector_number || ''
   };
 }
 // Best available price for a Pokémon card: TCGPlayer (USD) market→mid→low,
@@ -484,7 +493,9 @@ function mapPokemon(c) {
     cat,
     noLimit: cat === 'energy' && subs.includes('Basic'),
     basicPokemon: cat === 'pokemon' && subs.includes('Basic'),
-    aceSpec: subs.includes('ACE SPEC') || /ace spec/i.test(c.rarity || '')
+    aceSpec: subs.includes('ACE SPEC') || /ace spec/i.test(c.rarity || ''),
+    setCode: c.set ? (c.set.ptcgoCode || c.set.id || '') : '',
+    number: c.number || ''
   };
 }
 
@@ -644,8 +655,14 @@ async function save(next) {
     location: $('f_loc').value.trim(),
     tags: parseTags($('f_tags').value),
     image: currentImage || null,
-    meta: { cat: currentMeta.cat || null, noLimit: !!currentMeta.noLimit,
-            basicPokemon: !!currentMeta.basicPokemon, aceSpec: !!currentMeta.aceSpec },
+    meta: {
+      cat: currentMeta.cat || null,
+      noLimit: !!currentMeta.noLimit,
+      basicPokemon: !!currentMeta.basicPokemon,
+      aceSpec: !!currentMeta.aceSpec,
+      setCode: currentMeta.setCode || '',
+      number: currentMeta.number || ''
+    },
     updated: new Date().toISOString()
   };
   try {
@@ -768,6 +785,17 @@ function deckCards() {
   return cards.filter(c => deckGameShort(c.game) === deckGameShort(editingDeck.game))
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 }
+function selectedDeckCards(deck) {
+  const byId = Object.fromEntries(cards.map(c => [c.id, c]));
+  return Object.entries(deck.entries || {})
+    .map(([id, count]) => ({ card: byId[id], count }))
+    .filter(x => x.card && x.count > 0)
+    .sort((a, b) => {
+      const ac = cardMeta(a.card).cat || '';
+      const bc = cardMeta(b.card).cat || '';
+      return ac.localeCompare(bc) || (a.card.name || '').localeCompare(b.card.name || '');
+    });
+}
 function renderDeckEditor() {
   renderLegality();
   const q = $('deckSearch').value.trim().toLowerCase();
@@ -801,6 +829,130 @@ function changeCount(cardId, delta) {
   editingDeck.updated = new Date().toISOString();
   renderDeckEditor();
   dataPutDeck(editingDeck);
+}
+
+const PLAYTEST_FORMATS = {
+  mtg_forge: {
+    game: 'MTG',
+    label: 'MTG - Forge / Moxfield / Untap plain text',
+    ext: 'txt',
+    note: 'Use this for Forge vs-AI play, Moxfield goldfishing, or Untap.in browser play. Most tools also accept illegal/casual lists.',
+    links: [
+      ['Forge releases', 'https://github.com/Card-Forge/forge/releases', 'Free download, best option here for MTG vs AI.'],
+      ['Moxfield', 'https://moxfield.com/', 'Browser deck builder with solo playtest/goldfish.'],
+      ['Untap.in', 'https://untap.in/', 'Browser tabletop for playing with people.']
+    ],
+    build: buildMtgPlain
+  },
+  mtg_arena: {
+    game: 'MTG',
+    label: 'MTG Arena import text',
+    ext: 'txt',
+    note: 'Arena import works best when cards include set and collector number. Missing details fall back to quantity + name.',
+    links: [
+      ['MTG Arena', 'https://magic.wizards.com/en/mtgarena', 'Free client with deck import and online play.']
+    ],
+    build: buildMtgArena
+  },
+  pokemon_live: {
+    game: 'Pokemon',
+    label: 'Pokemon TCG Live / PTCG-sim text',
+    ext: 'txt',
+    note: 'Pokemon imports need set code and card number. Re-run Look up or Choose art on older cards if a line is missing those details.',
+    links: [
+      ['Pokemon TCG Live', 'https://tcg.pokemon.com/en-us/tcgl/', 'Official free app for online play.'],
+      ['PTCG-sim', 'https://ptcgsim.online/', 'Browser solo/multiplayer tabletop simulator.']
+    ],
+    build: buildPokemonLive
+  }
+};
+
+function deckFormatOptions(deck) {
+  return /magic/i.test(deck.game)
+    ? ['mtg_forge', 'mtg_arena']
+    : ['pokemon_live'];
+}
+function exportLineName(card) {
+  return String(card.name || '').replace(/\s+/g, ' ').trim();
+}
+function buildMtgPlain(deck) {
+  return selectedDeckCards(deck)
+    .map(({ card, count }) => `${count} ${exportLineName(card)}`)
+    .join('\n');
+}
+function buildMtgArena(deck) {
+  return selectedDeckCards(deck)
+    .map(({ card, count }) => {
+      const meta = card.meta || {};
+      const set = meta.setCode ? ` (${String(meta.setCode).toUpperCase()})` : '';
+      const num = meta.number ? ` ${meta.number}` : '';
+      return `${count} ${exportLineName(card)}${set}${num}`;
+    })
+    .join('\n');
+}
+function buildPokemonLive(deck) {
+  const groups = { pokemon: [], trainer: [], energy: [], other: [] };
+  selectedDeckCards(deck).forEach(({ card, count }) => {
+    const meta = card.meta || {};
+    const m = cardMeta(card);
+    const set = meta.setCode ? ` ${String(meta.setCode).toUpperCase()}` : '';
+    const num = meta.number ? ` ${meta.number}` : '';
+    const line = `${count} ${exportLineName(card)}${set}${num}`;
+    (groups[m.cat] || groups.other).push(line);
+  });
+  const sections = [];
+  if (groups.pokemon.length) sections.push(`Pokemon: ${sumGroup(groups.pokemon)}\n${groups.pokemon.join('\n')}`);
+  if (groups.trainer.length) sections.push(`Trainer: ${sumGroup(groups.trainer)}\n${groups.trainer.join('\n')}`);
+  if (groups.energy.length) sections.push(`Energy: ${sumGroup(groups.energy)}\n${groups.energy.join('\n')}`);
+  if (groups.other.length) sections.push(`Other: ${sumGroup(groups.other)}\n${groups.other.join('\n')}`);
+  return sections.join('\n\n');
+}
+function sumGroup(lines) {
+  return lines.reduce((sum, line) => sum + (parseInt(line, 10) || 0), 0);
+}
+function renderPlaytestExport() {
+  if (!editingDeck) return;
+  const key = $('playtestFormat').value || deckFormatOptions(editingDeck)[0];
+  const fmt = PLAYTEST_FORMATS[key];
+  const text = fmt.build(editingDeck);
+  const leg = legality(editingDeck);
+  $('deckExportText').value = text;
+  $('playtestNote').textContent = fmt.note;
+  $('playtestSummary').innerHTML =
+    `<div class="lhead"><span>${esc(editingDeck.name || 'Untitled')}</span>
+      <span class="${leg.legal ? 'ok' : 'bad'}">${leg.legal ? 'Legal' : 'Not legal'}</span></div>
+     <div class="brk">${leg.total}/${leg.target} cards. You can still export casual or illegal lists when a platform allows it.</div>`;
+  $('playtestLinks').innerHTML = fmt.links.map(([label, url, desc]) =>
+    `<a href="${url}" target="_blank" rel="noopener">
+      <strong>${esc(label)}</strong><span>${esc(desc)}</span>
+    </a>`).join('');
+}
+function openPlaytest() {
+  const opts = deckFormatOptions(editingDeck);
+  const sel = $('playtestFormat');
+  sel.innerHTML = '';
+  opts.forEach(k => sel.append(new Option(PLAYTEST_FORMATS[k].label, k)));
+  renderPlaytestExport();
+  $('deckEditor').close();
+  $('playtestDialog').showModal();
+}
+async function copyDeckExport() {
+  const text = $('deckExportText').value;
+  if (!text) return;
+  await navigator.clipboard.writeText(text);
+  $('copyDeckBtn').textContent = 'Copied';
+  setTimeout(() => { $('copyDeckBtn').textContent = 'Copy list'; }, 1200);
+}
+function downloadDeckExport() {
+  const key = $('playtestFormat').value;
+  const fmt = PLAYTEST_FORMATS[key];
+  const name = (editingDeck?.name || 'deck').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'deck';
+  const blob = new Blob([$('deckExportText').value], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${name}-${key}.${fmt.ext}`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 // The legality engine.
@@ -892,7 +1044,14 @@ async function refreshPrices() {
     try {
       const hit = /magic/i.test(c.game) ? await lookupMTG(c.name) : await lookupPokemon(c.name);
       if (hit) {
-        const meta = { cat: hit.cat, noLimit: !!hit.noLimit, basicPokemon: !!hit.basicPokemon, aceSpec: !!hit.aceSpec };
+        const meta = {
+          cat: hit.cat,
+          noLimit: !!hit.noLimit,
+          basicPokemon: !!hit.basicPokemon,
+          aceSpec: !!hit.aceSpec,
+          setCode: hit.setCode || c.meta?.setCode || '',
+          number: hit.number || c.meta?.number || ''
+        };
         await dataPut({ ...c, price: hit.price != null ? hit.price : c.price, meta, updated: new Date().toISOString() });
         if (hit.price != null) updated++;
       }
@@ -1026,6 +1185,11 @@ async function init() {
   $('newMtgDeck').onclick = () => newDeck('mtg');
   $('deckSearch').oninput = renderDeckEditor;
   $('deck_name').oninput = () => { if (editingDeck) { editingDeck.name = $('deck_name').value; dataPutDeck(editingDeck); } };
+  $('playtestBtn').onclick = openPlaytest;
+  $('playtestFormat').onchange = renderPlaytestExport;
+  $('copyDeckBtn').onclick = copyDeckExport;
+  $('downloadDeckBtn').onclick = downloadDeckExport;
+  $('playtestCloseBtn').onclick = () => { $('playtestDialog').close(); if (editingDeck) $('deckEditor').showModal(); };
   $('deckCloseBtn').onclick = () => { $('deckEditor').close(); openDecks(); };
   $('deckDeleteBtn').onclick = async () => {
     if (editingDeck && confirm('Delete this deck?')) { await dataDeleteDeck(editingDeck.id); $('deckEditor').close(); openDecks(); }

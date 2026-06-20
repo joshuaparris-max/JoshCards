@@ -132,10 +132,29 @@
         <button type="button" id="deckDeleteBtn" class="danger">Delete</button>
       </span>
       <div id="deckLegality" class="legality"></div>
+      <button type="button" id="playtestBtn" class="primary">Playtest / export</button>
       <input id="deckSearch" type="search" placeholder="Filter your cards…" />
       <div id="deckCardList" class="results"></div>
       <div class="actions">
         <button type="button" id="deckCloseBtn">Done</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="playtestDialog">
+    <form method="dialog" id="playtestForm">
+      <h2>Playtest deck</h2>
+      <div id="playtestSummary" class="legality"></div>
+      <label>Export format
+        <select id="playtestFormat"></select>
+      </label>
+      <textarea id="deckExportText" readonly spellcheck="false"></textarea>
+      <div id="playtestLinks" class="platformLinks"></div>
+      <p id="playtestNote" class="hint"></p>
+      <div class="actions">
+        <button type="button" id="copyDeckBtn">Copy list</button>
+        <button type="button" id="downloadDeckBtn">Download</button>
+        <button type="button" id="playtestCloseBtn">Close</button>
       </div>
     </form>
   </dialog>
