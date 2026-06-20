@@ -849,10 +849,12 @@ function renderDeckEditor() {
   pool.forEach(c => {
     const count = editingDeck.entries[c.id] || 0;
     const m = cardMeta(c);
+    const owned = c.qty || 1;
+    const short = count > owned ? ` · <span class="bad">need ${count - owned} more</span>` : '';
     const row = document.createElement('div');
     row.className = 'deckRow';
     row.innerHTML = `<img src="${c.image || 'icons/icon.svg'}" alt="">
-      <div class="dn">${esc(c.name)}<br><small>${esc(m.cat)}${c.qty ? ' · own ' + c.qty : ''}</small></div>`;
+      <div class="dn">${esc(c.name)}<br><small>${esc(m.cat)} · own ${owned}${short}</small></div>`;
     const step = document.createElement('div');
     step.className = 'stepper';
     const minus = document.createElement('button'); minus.type = 'button'; minus.textContent = '−';
@@ -1004,7 +1006,7 @@ function legality(deck) {
   const target = 60;
   const entries = deck.entries || {};
   const byId = Object.fromEntries(cards.map(c => [c.id, c]));
-  let total = 0, aceSpec = 0, hasBasicPokemon = false;
+  let total = 0, aceSpec = 0, hasBasicPokemon = false, owned = 0, value = 0, shortItems = 0;
   const byCat = {};
   const byName = {};        // for the max-4 rule (counts copies across printings of a name)
   const nameNoLimit = {};
@@ -1018,6 +1020,10 @@ function legality(deck) {
     const key = (c.name || '').toLowerCase();
     byName[key] = (byName[key] || 0) + n;
     if (m.noLimit) nameNoLimit[key] = true;
+    const have = c.qty || 1;
+    owned += Math.min(n, have);
+    if (n > have) shortItems++;
+    if (c.price != null) value += c.price * n;
   }
   const overFour = Object.entries(byName).filter(([k, n]) => n > 4 && !nameNoLimit[k]).map(([k]) => k);
   const checks = [];
@@ -1031,7 +1037,7 @@ function legality(deck) {
     checks.push({ label: `Max 1 ACE SPEC (have ${aceSpec})`, ok: aceSpec <= 1 });
   }
   const legal = checks.every(c => c.ok);
-  return { isMtg, target, total, byCat, checks, legal };
+  return { isMtg, target, total, byCat, checks, legal, owned, value, shortItems };
 }
 function renderLegality() {
   const leg = legality(editingDeck);
@@ -1042,7 +1048,10 @@ function renderLegality() {
     `<div class="lhead"><span>${leg.total}/${leg.target}</span>
        <span class="${leg.legal ? 'ok' : 'bad'}">${leg.legal ? 'LEGAL ✓' : 'Not legal yet'}</span></div>` +
     leg.checks.map(c => `<div class="chk ${c.ok ? 'ok' : 'bad'}">${c.ok ? '✓' : '✗'} <span>${esc(c.label)}</span></div>`).join('') +
-    `<div class="brk">${brk}</div>`;
+    `<div class="brk">${brk}</div>` +
+    `<div class="brk">You own ${leg.owned}/${leg.total} cards in this deck` +
+      (leg.shortItems ? ` · <span class="bad">${leg.shortItems} card(s) need more copies</span>` : '') +
+      (leg.value ? ` · ~$${money(leg.value)} value` : '') + `</div>`;
 }
 
 // ---------- Collection dashboard ----------
