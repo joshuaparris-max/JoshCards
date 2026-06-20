@@ -1436,6 +1436,19 @@ async function init() {
   $('bulkTagBtn').onclick = bulkAddTag;
   $('bulkCondBtn').onclick = bulkSetCondition;
   $('bulkDelBtn').onclick = bulkDelete;
+  // Read-only share mode (?view=ro) — hides all editing affordances.
+  if (new URLSearchParams(location.search).get('view') === 'ro') {
+    document.body.classList.add('readonly');
+    const h = document.querySelector('header h1');
+    if (h) h.insertAdjacentHTML('afterend', '<span class="readonlyTag">view only</span>');
+  }
+  $('shareBtn').onclick = () => {
+    const url = location.origin + location.pathname + '?view=ro';
+    navigator.clipboard.writeText(url).then(
+      () => alert('View-only link copied:\n\n' + url),
+      () => prompt('Copy this view-only link:', url)
+    );
+  };
   applyTheme(localStorage.getItem('joshcards_theme') || 'dark');
   $('themeBtn').onclick = () => applyTheme(document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
   $('randomBtn').onclick = randomGame;

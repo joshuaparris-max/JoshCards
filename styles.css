@@ -47,6 +47,10 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
 .bulkBar .ibtns{display:flex;gap:6px;flex-wrap:wrap}
 .bulkBar button{padding:6px 10px;font-size:13px}
 .card.selected{outline:3px solid var(--accent);outline-offset:-1px}
+body.readonly #addBtn,body.readonly #findBtn,body.readonly #selectBtn,
+body.readonly #detailEditBtn,body.readonly .cardStep,body.readonly #emptyState .capRow,
+body.readonly #importInput,body.readonly .fileBtn{display:none}
+.readonlyTag{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:2px 6px}
 .gridHeader{grid-column:1/-1;font-weight:700;font-size:15px;color:var(--accent);
   padding:10px 2px 2px;border-bottom:1px solid var(--line)}
 .emptyState{max-width:520px;margin:40px auto;padding:0 20px;text-align:center}
