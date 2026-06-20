@@ -32,6 +32,52 @@ function putCard(c) { return new Promise((res, rej) => { const r = tx('readwrite
 function delCard(id) { return new Promise((res, rej) => { const r = tx('readwrite').delete(id); r.onsuccess = res; r.onerror = () => rej(r.error); }); }
 function allCards() { return new Promise((res, rej) => { const r = tx('readonly').getAll(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
 
+// ---------- Online sync (Supabase REST) ----------
+function syncCfg() {
+  try {
+    const c = JSON.parse(localStorage.getItem('joshcards_sync') || 'null');
+    return (c && c.url && c.key) ? c : null;
+  } catch { return null; }
+}
+function saveSyncCfg(url, key) {
+  if (url && key) localStorage.setItem('joshcards_sync', JSON.stringify({ url: url.replace(/\/+$/, ''), key }));
+  else localStorage.removeItem('joshcards_sync');
+}
+function sbHeaders(cfg) {
+  return { apikey: cfg.key, Authorization: 'Bearer ' + cfg.key, 'Content-Type': 'application/json' };
+}
+async function remoteGetAll(cfg) {
+  const r = await fetch(cfg.url + '/rest/v1/cards?select=*', { headers: sbHeaders(cfg) });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+async function remoteUpsert(cfg, card) {
+  const r = await fetch(cfg.url + '/rest/v1/cards', {
+    method: 'POST',
+    headers: { ...sbHeaders(cfg), Prefer: 'resolution=merge-duplicates' },
+    body: JSON.stringify(card)
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+}
+async function remoteDelete(cfg, id) {
+  const r = await fetch(cfg.url + '/rest/v1/cards?id=eq.' + encodeURIComponent(id), {
+    method: 'DELETE', headers: sbHeaders(cfg)
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+}
+
+// Data layer: local IndexedDB is always the cache; remote is the shared truth.
+async function dataPut(card) {
+  await putCard(card);
+  const cfg = syncCfg();
+  if (cfg) await remoteUpsert(cfg, card);
+}
+async function dataDelete(id) {
+  await delCard(id);
+  const cfg = syncCfg();
+  if (cfg) await remoteDelete(cfg, id);
+}
+
 // ---------- State / elements ----------
 let cards = [];
 let editingId = null;
@@ -353,21 +399,37 @@ async function save() {
     image: currentImage || null,
     updated: new Date().toISOString()
   };
-  await putCard(card);
+  try {
+    await dataPut(card);
+  } catch (e) {
+    alert('Saved locally, but online sync failed: ' + e.message + '\nIt will need re-saving when sync works.');
+  }
   await reload();
   $('cardDialog').close();
 }
 async function removeCard() {
   if (editingId && confirm('Delete this card?')) {
-    await delCard(editingId);
+    try { await dataDelete(editingId); }
+    catch (e) { alert('Deleted locally, but online sync failed: ' + e.message); }
     await reload();
     $('cardDialog').close();
   }
 }
 
 async function reload() {
+  const cfg = syncCfg();
+  if (cfg) {
+    try {
+      const remote = await remoteGetAll(cfg);
+      // mirror remote into the local cache so offline still shows everything
+      for (const c of remote) await putCard(c);
+    } catch (e) {
+      console.warn('Sync pull failed, showing local cache:', e.message);
+    }
+  }
   cards = (await allCards()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   render();
+  $('syncBtn').textContent = cfg ? 'Sync ✓' : 'Sync';
 }
 
 // ---------- Import / export ----------
@@ -381,9 +443,38 @@ function exportJSON() {
 async function importJSON(file) {
   const text = await file.text();
   const arr = JSON.parse(text);
-  for (const c of arr) { if (c && c.id) await putCard(c); }
+  for (const c of arr) { if (c && c.id) await dataPut(c); }
   await reload();
   alert('Imported ' + arr.length + ' cards.');
+}
+
+// ---------- Sync dialog ----------
+function setSyncStatus(msg, isErr) {
+  const s = $('syncStatus');
+  if (!msg) { s.hidden = true; return; }
+  s.hidden = false; s.textContent = msg; s.classList.toggle('err', !!isErr);
+}
+function openSync() {
+  const cfg = syncCfg();
+  $('s_url').value = cfg?.url || '';
+  $('s_key').value = cfg?.key || '';
+  setSyncStatus(cfg ? 'Sync is on.' : '');
+  $('syncDialog').showModal();
+}
+async function testSync() {
+  const url = $('s_url').value.trim().replace(/\/+$/, ''), key = $('s_key').value.trim();
+  if (!url || !key) { setSyncStatus('Enter both URL and key.', true); return; }
+  setSyncStatus('Testing…');
+  try {
+    const rows = await remoteGetAll({ url, key });
+    saveSyncCfg(url, key);
+    // push anything local that isn't on the server yet
+    for (const c of await allCards()) await remoteUpsert({ url, key }, c);
+    await reload();
+    setSyncStatus(`Connected ✓ — ${rows.length} cards on server, local cards uploaded.`);
+  } catch (e) {
+    setSyncStatus('Failed: ' + e.message + ' — check URL, key, and that the cards table exists.', true);
+  }
 }
 
 // ---------- Wire up ----------
@@ -411,6 +502,10 @@ async function init() {
   $('deleteBtn').onclick = removeCard;
   $('cancelBtn').onclick = () => { stopCamera(); $('cardDialog').close(); };
   $('cardDialog').addEventListener('close', stopCamera);
+  $('syncBtn').onclick = openSync;
+  $('syncSaveBtn').onclick = () => { saveSyncCfg($('s_url').value.trim(), $('s_key').value.trim()); reload(); $('syncDialog').close(); };
+  $('syncCloseBtn').onclick = () => $('syncDialog').close();
+  $('syncTestBtn').onclick = testSync;
   $('exportBtn').onclick = exportJSON;
   $('importInput').onchange = (e) => e.target.files[0] && importJSON(e.target.files[0]);
 

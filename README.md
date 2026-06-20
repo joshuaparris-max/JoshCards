@@ -12,10 +12,19 @@ A phone-friendly card catalogue for Josh & Sylvie. Scan any card (Pokémon, Magi
 Open the deployed URL on your phone → **+ Scan / Add** → Open camera → Capture → fill name/game/tags → Save.
 Search and filter from the top bar. **Export JSON** makes a backup; **Import JSON** restores or moves data to another device.
 
-## Known limitation (by design, for now)
-Each device keeps its own copy — Josh's phone and Sylvie's phone don't auto-sync.
-Use Export/Import to move a snapshot between them. Upgrade path: swap IndexedDB for a hosted
-DB (e.g. Vercel Postgres / Supabase) + a small API route for real-time multi-device sync.
+## Online sync (optional — shares one database across devices)
+Without setup the app is local-only per device. To share one database:
+
+1. Create a free project at **supabase.com**.
+2. **SQL Editor → New query** → paste the contents of `supabase-setup.sql` → **Run**.
+3. **Project Settings → API** → copy the **Project URL** and the **anon public** key.
+4. In the app: **Sync** → paste both → **Test & sync now** → **Save**.
+5. Do the same paste on the other phone. Both now read/write the same data.
+
+It stays offline-capable: the local IndexedDB is a cache, and changes sync to Supabase when online.
+
+Security note: the included policy lets the anon key read/write the `cards` table — fine for a
+private family list. To lock it down, swap in authenticated-only policies + Supabase Auth.
 
 ## Deploy
 Static site, zero build. On Vercel: **Add New → Project → import this repo → Deploy** (Framework preset: *Other*).

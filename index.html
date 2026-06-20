@@ -95,9 +95,30 @@
   </dialog>
 
   <footer>
+    <button id="syncBtn">Sync</button>
     <button id="exportBtn">Export JSON</button>
     <label class="fileBtn small">Import JSON<input id="importInput" type="file" accept="application/json" hidden /></label>
   </footer>
+
+  <dialog id="syncDialog">
+    <form method="dialog" id="syncForm">
+      <h2>Online sync</h2>
+      <p class="hint">Paste your Supabase project URL and anon key to share one database
+        across devices. Leave blank to stay local-only on this device.</p>
+      <label>Supabase URL
+        <input id="s_url" type="url" placeholder="https://xxxx.supabase.co" />
+      </label>
+      <label>Supabase anon key
+        <input id="s_key" type="text" placeholder="eyJhbGci…" />
+      </label>
+      <div id="syncStatus" class="status" hidden></div>
+      <div class="actions">
+        <button type="button" id="syncTestBtn">Test &amp; sync now</button>
+        <button type="button" id="syncSaveBtn" class="primary">Save</button>
+        <button type="button" id="syncCloseBtn">Close</button>
+      </div>
+    </form>
+  </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="app.js"></script>
