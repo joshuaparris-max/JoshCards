@@ -360,11 +360,19 @@ function mapMTG(c) {
     sub: [c.set_name, c.rarity].filter(Boolean).join(' · ')
   };
 }
-// Pick a market price (USD) from a Pokémon card's TCGPlayer block.
+// Best available price for a Pokémon card: TCGPlayer (USD) market→mid→low,
+// then fall back to Cardmarket (EUR) trend/average.
 function pokePrice(c) {
   const p = c.tcgplayer && c.tcgplayer.prices;
-  if (!p) return null;
-  for (const k of Object.keys(p)) { if (p[k] && p[k].market) return p[k].market; }
+  if (p) {
+    for (const field of ['market', 'mid', 'low']) {
+      for (const k of Object.keys(p)) {
+        if (p[k] && typeof p[k][field] === 'number') return p[k][field];
+      }
+    }
+  }
+  const cm = c.cardmarket && c.cardmarket.prices;
+  if (cm) return cm.trendPrice || cm.averageSellPrice || cm.avg30 || null;
   return null;
 }
 function mapPokemon(c) {
