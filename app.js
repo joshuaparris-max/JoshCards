@@ -221,6 +221,17 @@ function render() {
       .join(' ').toLowerCase();
     return hay.includes(q);
   });
+  const sort = $('sortBy') ? $('sortBy').value : 'name';
+  const byName = (a, b) => (a.name || '').localeCompare(b.name || '');
+  list.sort((a, b) => {
+    switch (sort) {
+      case 'price': return ((b.price || 0) * (b.qty || 1)) - ((a.price || 0) * (a.qty || 1)) || byName(a, b);
+      case 'qty': return (b.qty || 1) - (a.qty || 1) || byName(a, b);
+      case 'recent': return (b.updated || '').localeCompare(a.updated || '') || byName(a, b);
+      case 'game': return (a.game || '').localeCompare(b.game || '') || byName(a, b);
+      default: return byName(a, b);
+    }
+  });
   $('count').textContent = `${list.length} / ${cards.length} cards`;
   const grid = $('grid');
   grid.innerHTML = '';
@@ -1190,6 +1201,7 @@ async function init() {
   $('search').oninput = render;
   $('filterGame').onchange = render;
   $('filterTag').onchange = render;
+  $('sortBy').onchange = render;
   $('camBtn').onclick = startCamera;
   $('shotBtn').onclick = capture;
   $('fileInput').onchange = (e) => e.target.files[0] && fileToImage(e.target.files[0]);
