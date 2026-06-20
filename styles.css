@@ -34,6 +34,8 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
 .count{color:var(--muted);font-size:13px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
   gap:12px;padding:0 16px}
+.gridHeader{grid-column:1/-1;font-weight:700;font-size:15px;color:var(--accent);
+  padding:10px 2px 2px;border-bottom:1px solid var(--line)}
 .emptyState{max-width:520px;margin:40px auto;padding:0 20px;text-align:center}
 .emptyState h2{margin:0 0 8px;font-size:22px}
 .emptyState p{margin:0 0 18px;color:var(--muted);line-height:1.45}

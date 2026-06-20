@@ -236,7 +236,16 @@ function render() {
   const grid = $('grid');
   grid.innerHTML = '';
   $('emptyState').hidden = cards.length > 0 || q || fg || ft;
+  let lastGame = null;
   list.forEach(c => {
+    if (sort === 'game' && c.game !== lastGame) {
+      lastGame = c.game;
+      const h = document.createElement('div');
+      h.className = 'gridHeader';
+      const n = list.filter(x => x.game === c.game).length;
+      h.textContent = `${c.game || 'Other'} (${n})`;
+      grid.append(h);
+    }
     const el = document.createElement('div');
     el.className = 'card';
     el.onclick = () => openDetail(c);
