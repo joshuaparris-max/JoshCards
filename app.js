@@ -213,9 +213,12 @@ function render() {
   const q = $('search').value.trim().toLowerCase();
   const fg = $('filterGame').value;
   const ft = $('filterTag').value;
+  const fo = $('filterOwn') ? $('filterOwn').value : '';
   const list = cards.filter(c => {
     if (fg && c.game !== fg) return false;
     if (ft && !(c.tags || []).includes(ft)) return false;
+    if (fo === 'owned' && c.meta?.wishlist) return false;
+    if (fo === 'wish' && !c.meta?.wishlist) return false;
     if (!q) return true;
     const hay = [c.name, c.type, c.cost, c.power, c.rarity, c.location, (c.tags || []).join(' ')]
       .join(' ').toLowerCase();
@@ -251,7 +254,7 @@ function render() {
     el.onclick = () => openDetail(c);
     const img = c.image ? `<img src="${c.image}" alt="">` : `<img alt="" src="icons/icon.svg">`;
     el.innerHTML = `${img}<div class="body">
-      <div class="name">${esc(c.name)}</div>
+      <div class="name">${c.meta?.wishlist ? '★ ' : ''}${esc(c.name)}</div>
       <div class="meta">${esc(c.game || '')}${c.location ? ' · ' + esc(c.location) : ''}${c.meta?.condition ? ' · ' + esc(c.meta.condition) : ''}</div>
       ${c.price != null ? `<div class="price">$${money(c.price * (c.qty || 1))}${c.qty > 1 ? ` ($${money(c.price)} ea)` : ''}</div>` : ''}
     </div>`;
@@ -305,6 +308,7 @@ function openDialog(card) {
   $('f_price').value = card?.price != null ? card.price : '';
   $('f_qty').value = card?.qty || 1;
   $('f_condition').value = card?.meta?.condition || '';
+  $('f_wishlist').checked = !!card?.meta?.wishlist;
   $('f_loc').value = card?.location || '';
   $('f_tags').value = (card?.tags || []).join(', ');
   currentImage = card?.image || null;
@@ -732,7 +736,8 @@ async function save(next) {
       aceSpec: !!currentMeta.aceSpec,
       setCode: currentMeta.setCode || '',
       number: currentMeta.number || '',
-      condition: $('f_condition').value || ''
+      condition: $('f_condition').value || '',
+      wishlist: $('f_wishlist').checked
     },
     updated: new Date().toISOString()
   };
@@ -1149,6 +1154,7 @@ function renderStats() {
   const byGame = {};
   let totalCards = 0, totalValue = 0, priced = 0;
   cards.forEach(c => {
+    if (c.meta?.wishlist) return; // wishlist = want, not owned
     const g = c.game || 'Other';
     const qty = c.qty || 1;
     const val = (c.price != null ? c.price : 0) * qty;
@@ -1314,6 +1320,7 @@ async function init() {
   $('search').oninput = render;
   $('filterGame').onchange = render;
   $('filterTag').onchange = render;
+  $('filterOwn').onchange = render;
   $('sortBy').onchange = render;
   $('detailCloseBtn').onclick = () => $('detailDialog').close();
   $('detailEditBtn').onclick = () => { $('detailDialog').close(); openDialog(detailCard); };

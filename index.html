@@ -42,6 +42,11 @@
     <input id="search" type="search" placeholder="Search name, tags, location…" />
     <select id="filterGame"><option value="">All games</option></select>
     <select id="filterTag"><option value="">All tags</option></select>
+    <select id="filterOwn">
+      <option value="">Owned + wishlist</option>
+      <option value="owned">Owned only</option>
+      <option value="wish">Wishlist only</option>
+    </select>
     <select id="sortBy">
       <option value="name">Sort: Name</option>
       <option value="price">Sort: Value (high→low)</option>
@@ -117,6 +122,10 @@
         </select>
       </label>
       <label>Quantity <input id="f_qty" type="number" min="1" value="1" /></label>
+      <label class="checkRow">
+        <input id="f_wishlist" type="checkbox" />
+        Wishlist (want it — don't own yet)
+      </label>
       <label>Storage location <input id="f_loc" type="text" placeholder="Box A, shelf…" /></label>
       <label>Tags
         <input id="f_tags" type="text" placeholder="holo, round-corners, foil…" />
