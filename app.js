@@ -220,8 +220,8 @@ function render() {
     if (fo === 'owned' && c.meta?.wishlist) return false;
     if (fo === 'wish' && !c.meta?.wishlist) return false;
     if (!q) return true;
-    const hay = [c.name, c.type, c.cost, c.power, c.rarity, c.location, (c.tags || []).join(' ')]
-      .join(' ').toLowerCase();
+    const hay = [c.name, c.type, c.cost, c.power, c.rarity, c.location, (c.tags || []).join(' '),
+      c.meta?.setCode, c.meta?.number, c.meta?.condition].join(' ').toLowerCase();
     return hay.includes(q);
   });
   const sort = $('sortBy') ? $('sortBy').value : 'name';
