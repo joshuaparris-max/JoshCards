@@ -252,8 +252,8 @@ function render() {
       grid.append(h);
     }
     const el = document.createElement('div');
-    el.className = 'card';
-    el.onclick = () => openDetail(c);
+    el.className = 'card' + (selectMode && selected.has(c.id) ? ' selected' : '');
+    el.onclick = () => { if (selectMode) toggleSelect(c.id); else openDetail(c); };
     const img = c.image ? `<img src="${c.image}" alt="">` : `<img alt="" src="icons/icon.svg">`;
     el.innerHTML = `${img}<div class="body">
       <div class="name">${c.meta?.wishlist ? '★ ' : ''}${esc(c.name)}</div>
@@ -271,6 +271,48 @@ function render() {
   });
 }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m])); }
+
+// ---------- Bulk edit ----------
+let selectMode = false;
+const selected = new Set();
+function toggleSelectMode() {
+  selectMode = !selectMode;
+  selected.clear();
+  $('selectBtn').textContent = selectMode ? 'Cancel' : 'Select';
+  $('selectBtn').classList.toggle('primary', selectMode);
+  $('bulkBar').hidden = !selectMode;
+  render();
+}
+function toggleSelect(id) {
+  if (selected.has(id)) selected.delete(id); else selected.add(id);
+  $('bulkCount').textContent = selected.size + ' selected';
+  render();
+}
+async function bulkApply(fn, confirmMsg) {
+  if (!selected.size) { alert('Select some cards first.'); return; }
+  if (confirmMsg && !confirm(confirmMsg.replace('{n}', selected.size))) return;
+  const targets = cards.filter(c => selected.has(c.id));
+  for (const c of targets) await fn(c);
+  selected.clear();
+  await reload();
+  $('bulkCount').textContent = '0 selected';
+}
+function bulkSetLocation() {
+  const loc = prompt('Set storage location for selected cards:'); if (loc == null) return;
+  bulkApply(c => dataPut({ ...c, location: loc.trim(), updated: new Date().toISOString() }));
+}
+function bulkAddTag() {
+  const tag = prompt('Add a tag to selected cards:'); if (!tag) return;
+  const t = tag.trim().toLowerCase();
+  bulkApply(c => dataPut({ ...c, tags: [...new Set([...(c.tags || []), t])], updated: new Date().toISOString() }));
+}
+function bulkSetCondition() {
+  const cond = prompt('Set condition (NM, LP, MP, HP, DMG, or blank):'); if (cond == null) return;
+  bulkApply(c => dataPut({ ...c, meta: { ...(c.meta || {}), condition: cond.trim().toUpperCase() }, updated: new Date().toISOString() }));
+}
+function bulkDelete() {
+  bulkApply(c => dataDelete(c.id), 'Delete {n} selected card(s)? This cannot be undone.');
+}
 
 // Keep the rarity filter's options in sync with what's actually in the collection.
 function populateRarityFilter() {
@@ -1388,6 +1430,12 @@ async function init() {
   $('filterOwn').onchange = render;
   $('filterRarity').onchange = render;
   $('sortBy').onchange = render;
+  $('selectBtn').onclick = toggleSelectMode;
+  $('bulkDoneBtn').onclick = toggleSelectMode;
+  $('bulkLocBtn').onclick = bulkSetLocation;
+  $('bulkTagBtn').onclick = bulkAddTag;
+  $('bulkCondBtn').onclick = bulkSetCondition;
+  $('bulkDelBtn').onclick = bulkDelete;
   applyTheme(localStorage.getItem('joshcards_theme') || 'dark');
   $('themeBtn').onclick = () => applyTheme(document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
   $('randomBtn').onclick = randomGame;

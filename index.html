@@ -73,8 +73,20 @@
       <option value="recent">Sort: Recently added</option>
       <option value="game">Sort: Game</option>
     </select>
+    <button id="selectBtn">Select</button>
     <span id="count" class="count"></span>
   </section>
+
+  <div id="bulkBar" class="bulkBar" hidden>
+    <span id="bulkCount">0 selected</span>
+    <span class="ibtns">
+      <button type="button" id="bulkLocBtn">Set location</button>
+      <button type="button" id="bulkTagBtn">Add tag</button>
+      <button type="button" id="bulkCondBtn">Set condition</button>
+      <button type="button" id="bulkDelBtn" class="danger">Delete</button>
+      <button type="button" id="bulkDoneBtn">Done</button>
+    </span>
+  </div>
 
   <section id="emptyState" class="emptyState" hidden>
     <h2>Start with a card name</h2>
