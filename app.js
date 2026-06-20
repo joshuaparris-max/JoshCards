@@ -242,14 +242,29 @@ function render() {
     el.onclick = () => openDialog(c);
     const img = c.image ? `<img src="${c.image}" alt="">` : `<img alt="" src="icons/icon.svg">`;
     el.innerHTML = `${img}<div class="body">
-      <div class="name">${esc(c.name)}${c.qty > 1 ? ` ×${c.qty}` : ''}</div>
+      <div class="name">${esc(c.name)}</div>
       <div class="meta">${esc(c.game || '')}${c.location ? ' · ' + esc(c.location) : ''}</div>
       ${c.price != null ? `<div class="price">$${money(c.price * (c.qty || 1))}${c.qty > 1 ? ` ($${money(c.price)} ea)` : ''}</div>` : ''}
     </div>`;
+    const step = document.createElement('div');
+    step.className = 'cardStep';
+    const mk = (txt, d) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = txt;
+      b.onclick = (e) => { e.stopPropagation(); adjustQty(c, d); }; return b; };
+    const ct = document.createElement('span'); ct.className = 'cct'; ct.textContent = '×' + (c.qty || 1);
+    step.append(mk('−', -1), ct, mk('+', +1));
+    el.querySelector('.body').append(step);
     grid.append(el);
   });
 }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m])); }
+
+// Quick quantity change from the grid (no dialog).
+async function adjustQty(card, delta) {
+  const qty = Math.max(1, (card.qty || 1) + delta);
+  const updated = { ...card, qty, updated: new Date().toISOString() };
+  try { await dataPut(updated); } catch { /* synced on next load */ }
+  await reload();
+}
 
 // ---------- Dialog ----------
 function openDialog(card) {

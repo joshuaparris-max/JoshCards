@@ -44,6 +44,9 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
 .card .name{font-weight:600;font-size:14px;line-height:1.2}
 .card .meta{color:var(--muted);font-size:12px;margin-top:2px}
 .card .price{color:#4ad991;font-size:12px;font-weight:600;margin-top:2px}
+.cardStep{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:6px}
+.cardStep button{padding:2px 0;width:34px;font-size:16px;line-height:1}
+.cardStep .cct{font-weight:600;font-size:13px}
 .statTotals{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
 .statTotals .box{flex:1;min-width:90px;background:var(--bg);border:1px solid var(--line);
   border-radius:10px;padding:10px;text-align:center}
