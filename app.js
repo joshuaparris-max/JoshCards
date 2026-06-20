@@ -559,6 +559,15 @@ async function save(next) {
   }
 }
 function money(n) { return (Math.round(n * 100) / 100).toFixed(2); }
+
+// Open a price search for the current card so a blank price can be filled by hand.
+function openPriceSearch() {
+  const name = $('f_name').value.trim();
+  if (!name) { setStatus('Enter a name first.', true); return; }
+  const game = $('f_game').value.replace(/:.*$/, ''); // "Magic" / "Pokémon"
+  const q = encodeURIComponent(`${name} ${game} card price`);
+  window.open('https://www.google.com/search?q=' + q, '_blank', 'noopener');
+}
 async function removeCard() {
   if (editingId && confirm('Delete this card?')) {
     try { await dataDelete(editingId); }
@@ -771,6 +780,7 @@ async function init() {
   $('shotBtn').onclick = capture;
   $('fileInput').onchange = (e) => e.target.files[0] && fileToImage(e.target.files[0]);
   $('lookupBtn').onclick = lookup;
+  $('priceLookupBtn').onclick = openPriceSearch;
   $('artBtn').onclick = openArtPicker;
   $('artCloseBtn').onclick = () => $('artDialog').close();
   $('saveBtn').onclick = () => save(false);

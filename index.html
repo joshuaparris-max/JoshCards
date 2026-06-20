@@ -80,7 +80,12 @@
       <label>Cost (energy / mana) <input id="f_cost" type="text" /></label>
       <label>Power / HP <input id="f_power" type="text" /></label>
       <label>Rarity / Brand <input id="f_rarity" type="text" /></label>
-      <label>Price each (USD) <input id="f_price" type="number" min="0" step="0.01" placeholder="0.00" /></label>
+      <label>Price each (USD)
+        <span class="nameRow">
+          <input id="f_price" type="number" min="0" step="0.01" placeholder="0.00" />
+          <button type="button" id="priceLookupBtn" title="Search prices online">Check ↗</button>
+        </span>
+      </label>
       <label>Quantity <input id="f_qty" type="number" min="1" value="1" /></label>
       <label>Storage location <input id="f_loc" type="text" placeholder="Box A, shelf…" /></label>
       <label>Tags
