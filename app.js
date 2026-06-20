@@ -229,13 +229,10 @@ function applyHit(h) {
   if (h.image) { currentImage = h.image; showPreview(currentImage); }
 }
 
-// Scryfall — Magic: The Gathering (free, no key, fuzzy name match)
-async function lookupMTG(name) {
-  const r = await fetch('https://api.scryfall.com/cards/named?fuzzy=' + encodeURIComponent(name));
-  if (!r.ok) return null;
-  const c = await r.json();
-  if (c.object === 'error') return null;
+// --- Mappers: raw API card -> our hit shape (image = official art) ---
+function mapMTG(c) {
   const colours = (c.colors && c.colors.length) ? c.colors.join('') : 'Colourless';
+  const uris = c.image_uris || c.card_faces?.[0]?.image_uris || {};
   return {
     source: 'Scryfall',
     name: c.name,
@@ -243,8 +240,40 @@ async function lookupMTG(name) {
     cost: c.mana_cost || '',
     power: (c.power && c.toughness) ? `${c.power}/${c.toughness}` : '',
     rarity: c.rarity || '',
-    image: c.image_uris ? c.image_uris.normal : (c.card_faces?.[0]?.image_uris?.normal || null)
+    image: uris.normal || null,
+    thumb: uris.small || uris.normal || null,
+    sub: [c.set_name, c.rarity].filter(Boolean).join(' · ')
   };
+}
+function mapPokemon(c) {
+  const cost = c.attacks && c.attacks[0] && c.attacks[0].cost ? c.attacks[0].cost.join(' ') : '';
+  return {
+    source: 'Pokémon TCG',
+    name: c.name,
+    type: (c.types || []).join(', '),
+    cost,
+    power: c.hp ? 'HP ' + c.hp : '',
+    rarity: c.rarity || '',
+    image: c.images ? c.images.large : null,
+    thumb: c.images ? c.images.small : null,
+    sub: [c.set?.name, c.rarity].filter(Boolean).join(' · ')
+  };
+}
+
+// Scryfall — Magic: The Gathering (free, no key, fuzzy name match)
+async function lookupMTG(name) {
+  const r = await fetch('https://api.scryfall.com/cards/named?fuzzy=' + encodeURIComponent(name));
+  if (!r.ok) return null;
+  const c = await r.json();
+  if (c.object === 'error') return null;
+  return mapMTG(c);
+}
+async function searchMTG(name) {
+  const r = await fetch('https://api.scryfall.com/cards/search?order=name&q=' +
+    encodeURIComponent(name));
+  if (!r.ok) return [];
+  const j = await r.json();
+  return (j.data || []).slice(0, 30).map(mapMTG);
 }
 
 // Pokémon TCG API (free, no key needed for light use)
@@ -255,17 +284,55 @@ async function lookupPokemon(name) {
   if (!r.ok) return null;
   const j = await r.json();
   const c = j.data && j.data[0];
-  if (!c) return null;
-  const cost = c.attacks && c.attacks[0] && c.attacks[0].cost ? c.attacks[0].cost.join(' ') : '';
-  return {
-    source: 'Pokémon TCG',
-    name: c.name,
-    type: (c.types || []).join(', '),
-    cost,
-    power: c.hp ? 'HP ' + c.hp : '',
-    rarity: c.rarity || '',
-    image: c.images ? c.images.large : null
-  };
+  return c ? mapPokemon(c) : null;
+}
+async function searchPokemon(name) {
+  const url = 'https://api.pokemontcg.io/v2/cards?pageSize=30&orderBy=name&q=' +
+    encodeURIComponent('name:"' + name + '*"');
+  const r = await fetch(url);
+  if (!r.ok) return [];
+  const j = await r.json();
+  return (j.data || []).map(mapPokemon);
+}
+
+// --- Find-by-name dialog ---
+async function runFind() {
+  const game = $('find_game').value;
+  const name = $('find_name').value.trim();
+  const results = $('findResults');
+  results.innerHTML = '';
+  if (!name) { setFindStatus('Type a name to search.', true); return; }
+  if (!/magic/i.test(game) && !/pok/i.test(game)) {
+    setFindStatus('Find-by-name only works for Magic & Pokémon (no database for others).', true);
+    return;
+  }
+  setFindStatus('Searching ' + game + '…');
+  try {
+    const hits = /magic/i.test(game) ? await searchMTG(name) : await searchPokemon(name);
+    if (!hits.length) { setFindStatus('No matches.', true); return; }
+    setFindStatus(hits.length + ' result' + (hits.length > 1 ? 's' : '') + ' — tap to add.');
+    hits.forEach(h => {
+      const row = document.createElement('div');
+      row.className = 'result';
+      row.innerHTML = `<img src="${h.thumb || 'icons/icon.svg'}" alt="">
+        <div><div class="rn">${esc(h.name)}</div><div class="rs">${esc(h.sub || '')}</div></div>`;
+      row.onclick = () => {
+        $('findDialog').close();
+        openDialog(null);
+        $('f_game').value = game;
+        applyHit(h);
+        setStatus('Filled from ' + h.source + ' ✓');
+      };
+      results.append(row);
+    });
+  } catch (e) {
+    setFindStatus('Search failed (offline?).', true);
+  }
+}
+function setFindStatus(msg, isErr) {
+  const s = $('findStatus');
+  if (!msg) { s.hidden = true; return; }
+  s.hidden = false; s.textContent = msg; s.classList.toggle('err', !!isErr);
 }
 
 // ---------- Save / delete ----------
@@ -324,10 +391,15 @@ async function init() {
   fillSelect($('f_game'), GAMES, false);
   fillSelect($('filterGame'), GAMES, true, 'All games');
   fillSelect($('filterTag'), TAGS, true, 'All tags');
+  fillSelect($('find_game'), GAMES.filter(g => /magic|pok/i.test(g)), false);
   await openDB();
   await reload();
 
   $('addBtn').onclick = () => openDialog(null);
+  $('findBtn').onclick = () => { setFindStatus(''); $('findResults').innerHTML = ''; $('findDialog').showModal(); };
+  $('findGoBtn').onclick = runFind;
+  $('find_name').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runFind(); } });
+  $('findCloseBtn').onclick = () => $('findDialog').close();
   $('search').oninput = render;
   $('filterGame').onchange = render;
   $('filterTag').onchange = render;

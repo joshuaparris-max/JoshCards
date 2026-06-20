@@ -12,8 +12,31 @@
 <body>
   <header>
     <h1>JoshCards</h1>
-    <button id="addBtn" class="primary">+ Scan / Add</button>
+    <div class="hbtns">
+      <button id="findBtn">Find by name</button>
+      <button id="addBtn" class="primary">+ Scan / Add</button>
+    </div>
   </header>
+
+  <dialog id="findDialog">
+    <form method="dialog" id="findForm">
+      <h2>Find by name</h2>
+      <label>Game
+        <select id="find_game"></select>
+      </label>
+      <label>Card name
+        <span class="nameRow">
+          <input id="find_name" type="text" placeholder="Charizard, Lightning Bolt…" />
+          <button type="button" id="findGoBtn" class="primary">Search</button>
+        </span>
+      </label>
+      <div id="findStatus" class="status" hidden></div>
+      <div id="findResults" class="results"></div>
+      <div class="actions">
+        <button type="button" id="findCloseBtn">Close</button>
+      </div>
+    </form>
+  </dialog>
 
   <section id="controls">
     <input id="search" type="search" placeholder="Search name, tags, location…" />
