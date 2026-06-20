@@ -394,6 +394,61 @@ async function searchPokemon(name) {
   return (j.data || []).map(mapPokemon);
 }
 
+// --- All printings for a card (for the art picker) ---
+async function printsMTG(name) {
+  const r = await fetch('https://api.scryfall.com/cards/search?unique=prints&order=released&q=' +
+    encodeURIComponent('!"' + name + '"'));
+  if (!r.ok) return [];
+  const j = await r.json();
+  return (j.data || []).filter(c => c.image_uris || c.card_faces).map(mapMTG);
+}
+async function printsPokemon(name) {
+  const r = await fetch('https://api.pokemontcg.io/v2/cards?pageSize=60&orderBy=-set.releaseDate&q=' +
+    encodeURIComponent('name:"' + name + '"'));
+  if (!r.ok) return [];
+  const j = await r.json();
+  return (j.data || []).filter(c => c.images).map(mapPokemon);
+}
+
+function setArtStatus(msg, isErr, loading) {
+  const s = $('artStatus');
+  if (!msg) { s.hidden = true; s.innerHTML = ''; return; }
+  s.hidden = false;
+  s.innerHTML = (loading ? '<span class="spinner"></span>' : '') + '<span></span>';
+  s.lastChild.textContent = msg;
+  s.classList.toggle('err', !!isErr);
+}
+
+async function openArtPicker() {
+  const game = $('f_game').value;
+  const name = $('f_name').value.trim();
+  if (!name) { setStatus('Enter a name first, then Choose art.', true); return; }
+  const isMagic = /magic/i.test(game), isPoke = /pok/i.test(game);
+  if (!isMagic && !isPoke) { setStatus('Art picker only works for Magic & Pokémon.', true); return; }
+  $('artResults').innerHTML = '';
+  setArtStatus('Loading printings…', false, true);
+  $('artDialog').showModal();
+  try {
+    const prints = isMagic ? await printsMTG(name) : await printsPokemon(name);
+    if (!prints.length) { setArtStatus('No printings found for “' + name + '”.', true); return; }
+    setArtStatus(prints.length + ' printing' + (prints.length > 1 ? 's' : '') + ' — tap one.');
+    const grid = $('artResults');
+    prints.forEach(h => {
+      const fig = document.createElement('figure');
+      fig.innerHTML = `<img src="${h.thumb || h.image}" alt="">
+        <figcaption>${esc(h.sub || '')}</figcaption>`;
+      fig.onclick = () => {
+        applyHit(h);
+        setStatus('Art set from ' + h.source + ' ✓');
+        $('artDialog').close();
+      };
+      grid.append(fig);
+    });
+  } catch (e) {
+    setArtStatus('Failed to load printings (offline?).', true);
+  }
+}
+
 // --- Find-by-name dialog ---
 async function runFind() {
   const game = $('find_game').value;
@@ -625,6 +680,8 @@ async function init() {
   $('shotBtn').onclick = capture;
   $('fileInput').onchange = (e) => e.target.files[0] && fileToImage(e.target.files[0]);
   $('lookupBtn').onclick = lookup;
+  $('artBtn').onclick = openArtPicker;
+  $('artCloseBtn').onclick = () => $('artDialog').close();
   $('saveBtn').onclick = save;
   $('deleteBtn').onclick = removeCard;
   $('cancelBtn').onclick = () => { stopCamera(); $('cardDialog').close(); };

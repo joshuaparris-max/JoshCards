@@ -62,6 +62,7 @@
           <label class="fileBtn">Photo / file
             <input id="fileInput" type="file" accept="image/*" capture="environment" hidden />
           </label>
+          <button type="button" id="artBtn">Choose art</button>
         </div>
         <div id="scanStatus" class="status" hidden></div>
       </div>
@@ -100,6 +101,18 @@
     <button id="exportBtn">Export JSON</button>
     <label class="fileBtn small">Import JSON<input id="importInput" type="file" accept="application/json" hidden /></label>
   </footer>
+
+  <dialog id="artDialog">
+    <form method="dialog" id="artForm">
+      <h2>Choose art / printing</h2>
+      <p class="hint">Tap the printing that matches your physical card.</p>
+      <div id="artStatus" class="status" hidden></div>
+      <div id="artResults" class="artGrid"></div>
+      <div class="actions">
+        <button type="button" id="artCloseBtn">Close</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="dupDialog">
     <form method="dialog" id="dupForm">
