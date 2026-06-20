@@ -77,8 +77,18 @@ async function dataPut(card) {
 }
 async function dataDelete(id) {
   await delCard(id);
+  addTombstone(id);
   const cfg = syncCfg();
   if (cfg) await remoteDelete(cfg, id);
+}
+
+// Track deletions so a stale local copy on another device doesn't resurrect them.
+function tombstones() {
+  try { return JSON.parse(localStorage.getItem('joshcards_deleted') || '[]'); } catch { return []; }
+}
+function addTombstone(id) {
+  const t = tombstones();
+  if (!t.includes(id)) { t.push(id); localStorage.setItem('joshcards_deleted', JSON.stringify(t)); }
 }
 
 // ---------- State / elements ----------
@@ -424,10 +434,18 @@ async function reload() {
   if (cfg) {
     try {
       const remote = await remoteGetAll(cfg);
-      // mirror remote into the local cache so offline still shows everything
-      for (const c of remote) await putCard(c);
+      const remoteIds = new Set(remote.map(c => c.id));
+      const dead = new Set(tombstones());
+      // pull: mirror remote into local cache so offline still shows everything
+      for (const c of remote) if (!dead.has(c.id)) await putCard(c);
+      // push: upload local-only cards that were never synced (and weren't deleted)
+      for (const c of await allCards()) {
+        if (!remoteIds.has(c.id) && !dead.has(c.id)) await remoteUpsert(cfg, c);
+      }
+      // drop locally-cached copies of cards deleted elsewhere
+      for (const id of dead) if (!remoteIds.has(id)) await delCard(id);
     } catch (e) {
-      console.warn('Sync pull failed, showing local cache:', e.message);
+      console.warn('Sync failed, showing local cache:', e.message);
     }
   }
   cards = (await allCards()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
