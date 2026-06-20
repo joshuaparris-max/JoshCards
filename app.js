@@ -133,6 +133,12 @@ function addTombstone(id) {
   const t = tombstones();
   if (!t.includes(id)) { t.push(id); localStorage.setItem('joshcards_deleted', JSON.stringify(t)); }
 }
+// Ids we've previously seen on the server. Lets us tell a genuinely-new local
+// card (upload it) from one deleted on another device (drop it, don't resurrect).
+function knownSynced() {
+  try { return JSON.parse(localStorage.getItem('joshcards_known') || '[]'); } catch { return []; }
+}
+function setKnownSynced(ids) { localStorage.setItem('joshcards_known', JSON.stringify([...ids])); }
 
 // Resolve a card's deck category/flags — uses stored meta, else infers from fields
 // so cards added before deck-building still categorise reasonably.
@@ -849,17 +855,23 @@ async function reload() {
   if (cfg) {
     try {
       await flushQueue(cfg); // push any offline edits/deletes first
+      const knownPrev = new Set(knownSynced());
       const remote = await remoteGetAll(cfg);
       const remoteIds = new Set(remote.map(c => c.id));
       const dead = new Set(tombstones());
       // pull: mirror remote into local cache so offline still shows everything
       for (const c of remote) if (!dead.has(c.id)) await putCard(c);
-      // push: upload local-only cards that were never synced (and weren't deleted)
+      // reconcile each local-only card: new → upload; previously-synced → it was
+      // deleted on another device, so drop it locally instead of resurrecting it.
+      const nextKnown = new Set(remoteIds);
       for (const c of await allCards()) {
-        if (!remoteIds.has(c.id) && !dead.has(c.id)) await remoteUpsert(cfg, c);
+        if (remoteIds.has(c.id) || dead.has(c.id)) continue;
+        if (knownPrev.has(c.id)) { await delCard(c.id); }
+        else { await remoteUpsert(cfg, c); nextKnown.add(c.id); }
       }
       // drop locally-cached copies of cards deleted elsewhere
       for (const id of dead) if (!remoteIds.has(id)) await delCard(id);
+      setKnownSynced(nextKnown);
     } catch (e) {
       console.warn('Sync failed, showing local cache:', e.message);
     }
@@ -945,6 +957,8 @@ function renderDeckList() {
   });
 }
 function deckGameShort(g) { return /magic/i.test(g) ? 'MTG' : 'Pokémon'; }
+// Strict game key for matching catalogue cards to a deck (Star Realms etc. are neither).
+function deckGameKey(g) { return /magic/i.test(g) ? 'mtg' : /pok/i.test(g) ? 'pokemon' : 'other'; }
 
 function newDeck(game) {
   const d = { id: 'deck_' + Date.now().toString(36), name: game === 'mtg' ? 'New MTG deck' : 'New Pokémon deck',
@@ -968,8 +982,9 @@ function openDeckEditor(deck, isNew) {
   if (isNew) dataPutDeck(editingDeck); // persist immediately so it shows in the list
 }
 function deckCards() {
-  // catalogue cards for this deck's game, newest matches first by name
-  return cards.filter(c => deckGameShort(c.game) === deckGameShort(editingDeck.game))
+  // catalogue cards that actually belong to this deck's game
+  const key = deckGameKey(editingDeck.game);
+  return cards.filter(c => deckGameKey(c.game) === key)
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 }
 function selectedDeckCards(deck) {
@@ -1128,9 +1143,17 @@ function openPlaytest() {
 async function copyDeckExport() {
   const text = $('deckExportText').value;
   if (!text) return;
-  await navigator.clipboard.writeText(text);
-  $('copyDeckBtn').textContent = 'Copied';
-  setTimeout(() => { $('copyDeckBtn').textContent = 'Copy list'; }, 1200);
+  try {
+    await navigator.clipboard.writeText(text);
+    $('copyDeckBtn').textContent = 'Copied';
+    setTimeout(() => { $('copyDeckBtn').textContent = 'Copy list'; }, 1200);
+  } catch {
+    // clipboard API can be blocked (insecure context / permissions) — select instead
+    const ta = $('deckExportText');
+    ta.focus(); ta.select();
+    $('copyDeckBtn').textContent = 'Select + copy';
+    setTimeout(() => { $('copyDeckBtn').textContent = 'Copy list'; }, 1500);
+  }
 }
 function downloadDeckExport() {
   const key = $('playtestFormat').value;
@@ -1240,9 +1263,10 @@ function renderLegality() {
 function showStats() { renderStats(); $('statsDialog').showModal(); }
 function renderStats() {
   const byGame = {};
-  let totalCards = 0, totalValue = 0, priced = 0;
+  let totalCards = 0, totalValue = 0, priced = 0, uniqueOwned = 0;
   cards.forEach(c => {
     if (c.meta?.wishlist) return; // wishlist = want, not owned
+    uniqueOwned++;
     const g = c.game || 'Other';
     const qty = c.qty || 1;
     const val = (c.price != null ? c.price : 0) * qty;
@@ -1252,7 +1276,7 @@ function renderStats() {
     if (c.price != null) priced += qty;
   });
   $('statsTotals').innerHTML = `
-    <div class="box"><div class="big">${cards.length}</div><div class="lbl">unique cards</div></div>
+    <div class="box"><div class="big">${uniqueOwned}</div><div class="lbl">unique cards</div></div>
     <div class="box"><div class="big">${totalCards}</div><div class="lbl">total (incl. qty)</div></div>
     <div class="box"><div class="big">$${money(totalValue)}</div><div class="lbl">est. value</div></div>`;
   const games = Object.entries(byGame).sort((a, b) => b[1].value - a[1].value);
@@ -1260,7 +1284,7 @@ function renderStats() {
   games.forEach(([g, s]) => {
     html += `<tr><td>${esc(g)}</td><td class="num">${s.rows}</td><td class="num">${s.qty}</td><td class="num">$${money(s.value)}</td></tr>`;
   });
-  html += `<tr class="tot"><td>Total</td><td class="num">${cards.length}</td><td class="num">${totalCards}</td><td class="num">$${money(totalValue)}</td></tr>`;
+  html += `<tr class="tot"><td>Total</td><td class="num">${uniqueOwned}</td><td class="num">${totalCards}</td><td class="num">$${money(totalValue)}</td></tr>`;
   $('statsTable').innerHTML = html;
   renderValueTrend(totalValue);
 }
