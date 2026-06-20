@@ -255,13 +255,22 @@ function fileToImage(file) {
 }
 
 // ---------- OCR + database lookup (autofill) ----------
-function setStatus(msg, isErr, loading) {
-  const s = $('scanStatus');
+function setStatus(msg, isErr, loading, onCancel) {
+  renderStatus($('scanStatus'), msg, isErr, loading, onCancel);
+}
+// Shared status renderer: spinner + message + optional Cancel button.
+function renderStatus(s, msg, isErr, loading, onCancel) {
   if (!msg) { s.hidden = true; s.innerHTML = ''; return; }
   s.hidden = false;
-  s.innerHTML = (loading ? '<span class="spinner"></span>' : '') + '<span></span>';
-  s.lastChild.textContent = msg;
+  s.innerHTML = (loading ? '<span class="spinner"></span>' : '') + '<span class="stxt"></span>';
+  s.querySelector('.stxt').textContent = msg;
   s.classList.toggle('err', !!isErr);
+  if (onCancel) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'cancelBtn'; b.textContent = 'Cancel search';
+    b.onclick = onCancel;
+    s.append(b);
+  }
 }
 
 // Read the card name off the photo, then enrich from the right card database.
@@ -303,17 +312,20 @@ async function lookup() {
   if (!name) { setStatus('Type a name first, then Look up.', true); return; }
   const btn = $('lookupBtn');
   btn.disabled = true;
+  const ctrl = new AbortController();
+  const cancel = () => ctrl.abort();
   try {
     let hit = null;
-    if (/magic/i.test(game)) { setStatus('Searching Scryfall…', false, true); hit = await lookupMTG(name); }
-    else if (/pok/i.test(game)) { setStatus('Searching Pokémon TCG…', false, true); hit = await lookupPokemon(name); }
+    if (/magic/i.test(game)) { setStatus('Searching Scryfall…', false, true, cancel); hit = await lookupMTG(name, ctrl.signal); }
+    else if (/pok/i.test(game)) { setStatus('Searching Pokémon TCG…', false, true, cancel); hit = await lookupPokemon(name, ctrl.signal); }
     else { setStatus('No card database for this game — keeping your photo & name.'); return; }
 
     if (!hit) { setStatus('No match found — check the name and Look up again.', true); return; }
     applyHit(hit);
     setStatus('Filled from ' + hit.source + ' ✓');
   } catch (e) {
-    setStatus('Lookup failed (offline?). Fields stay editable.', true);
+    if (e.name === 'AbortError') setStatus('Search cancelled.');
+    else setStatus('Lookup failed (offline?). Fields stay editable.', true);
   } finally {
     btn.disabled = false;
   }
@@ -360,35 +372,35 @@ function mapPokemon(c) {
 }
 
 // Scryfall — Magic: The Gathering (free, no key, fuzzy name match)
-async function lookupMTG(name) {
-  const r = await fetch('https://api.scryfall.com/cards/named?fuzzy=' + encodeURIComponent(name));
+async function lookupMTG(name, signal) {
+  const r = await fetch('https://api.scryfall.com/cards/named?fuzzy=' + encodeURIComponent(name), { signal });
   if (!r.ok) return null;
   const c = await r.json();
   if (c.object === 'error') return null;
   return mapMTG(c);
 }
-async function searchMTG(name) {
+async function searchMTG(name, signal) {
   const r = await fetch('https://api.scryfall.com/cards/search?order=name&q=' +
-    encodeURIComponent(name));
+    encodeURIComponent(name), { signal });
   if (!r.ok) return [];
   const j = await r.json();
   return (j.data || []).slice(0, 30).map(mapMTG);
 }
 
 // Pokémon TCG API (free, no key needed for light use)
-async function lookupPokemon(name) {
+async function lookupPokemon(name, signal) {
   const url = 'https://api.pokemontcg.io/v2/cards?pageSize=1&q=' +
     encodeURIComponent('name:"' + name + '"');
-  const r = await fetch(url);
+  const r = await fetch(url, { signal });
   if (!r.ok) return null;
   const j = await r.json();
   const c = j.data && j.data[0];
   return c ? mapPokemon(c) : null;
 }
-async function searchPokemon(name) {
+async function searchPokemon(name, signal) {
   const url = 'https://api.pokemontcg.io/v2/cards?pageSize=30&orderBy=name&q=' +
     encodeURIComponent('name:"' + name + '*"');
-  const r = await fetch(url);
+  const r = await fetch(url, { signal });
   if (!r.ok) return [];
   const j = await r.json();
   return (j.data || []).map(mapPokemon);
@@ -462,9 +474,10 @@ async function runFind() {
   }
   const goBtn = $('findGoBtn');
   goBtn.disabled = true;
-  setFindStatus('Searching ' + game + '…', false, true);
+  const ctrl = new AbortController();
+  setFindStatus('Searching ' + game + '…', false, true, () => ctrl.abort());
   try {
-    const hits = /magic/i.test(game) ? await searchMTG(name) : await searchPokemon(name);
+    const hits = /magic/i.test(game) ? await searchMTG(name, ctrl.signal) : await searchPokemon(name, ctrl.signal);
     if (!hits.length) { setFindStatus('No matches.', true); return; }
     setFindStatus(hits.length + ' result' + (hits.length > 1 ? 's' : '') + ' — tap to add.');
     hits.forEach(h => {
@@ -482,18 +495,14 @@ async function runFind() {
       results.append(row);
     });
   } catch (e) {
-    setFindStatus('Search failed (offline?).', true);
+    if (e.name === 'AbortError') setFindStatus('Search cancelled.');
+    else setFindStatus('Search failed (offline?).', true);
   } finally {
     $('findGoBtn').disabled = false;
   }
 }
-function setFindStatus(msg, isErr, loading) {
-  const s = $('findStatus');
-  if (!msg) { s.hidden = true; s.innerHTML = ''; return; }
-  s.hidden = false;
-  s.innerHTML = (loading ? '<span class="spinner"></span>' : '') + '<span></span>';
-  s.lastChild.textContent = msg;
-  s.classList.toggle('err', !!isErr);
+function setFindStatus(msg, isErr, loading, onCancel) {
+  renderStatus($('findStatus'), msg, isErr, loading, onCancel);
 }
 
 // ---------- Save / delete ----------
