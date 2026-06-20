@@ -781,6 +781,20 @@ async function importJSON(file) {
   await reload();
   alert('Imported ' + arr.length + ' cards.');
 }
+function csvCell(v) {
+  const s = String(v == null ? '' : v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function exportCSV() {
+  const cols = ['name', 'game', 'type', 'cost', 'power', 'rarity', 'price', 'qty', 'location'];
+  const rows = [cols.join(',')];
+  cards.forEach(c => rows.push(cols.map(k => csvCell(k === 'tags' ? (c.tags || []).join('; ') : c[k])).join(',')));
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'joshcards-collection.csv';
+  a.click();
+}
 
 // ---------- Deck building ----------
 let editingDeck = null;
@@ -813,6 +827,13 @@ function newDeck(game) {
   const d = { id: 'deck_' + Date.now().toString(36), name: game === 'mtg' ? 'New MTG deck' : 'New Pokémon deck',
     game: game === 'mtg' ? 'Magic: The Gathering' : 'Pokémon', entries: {}, updated: new Date().toISOString() };
   openDeckEditor(d, true);
+}
+async function cloneDeck() {
+  if (!editingDeck) return;
+  const copy = { id: 'deck_' + Date.now().toString(36), name: (editingDeck.name || 'Deck') + ' (copy)',
+    game: editingDeck.game, entries: { ...editingDeck.entries }, updated: new Date().toISOString() };
+  await dataPutDeck(copy);
+  openDeckEditor(copy);
 }
 function openDeckEditor(deck, isNew) {
   editingDeck = { ...deck, entries: { ...(deck.entries || {}) } };
@@ -1285,6 +1306,8 @@ async function init() {
   $('deck_name').oninput = () => { if (editingDeck) { editingDeck.name = $('deck_name').value; dataPutDeck(editingDeck); } };
   $('playtestBtn').onclick = openPlaytest;
   $('sampleHandBtn').onclick = openSampleHand;
+  $('deckCloneBtn').onclick = cloneDeck;
+  $('exportCsvBtn').onclick = exportCSV;
   $('drawAgainBtn').onclick = drawHand;
   $('handCloseBtn').onclick = () => $('handDialog').close();
   $('playtestFormat').onchange = renderPlaytestExport;
