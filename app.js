@@ -602,7 +602,8 @@ async function importJSON(file) {
 }
 
 // ---------- Collection dashboard ----------
-function showStats() {
+function showStats() { renderStats(); $('statsDialog').showModal(); }
+function renderStats() {
   const byGame = {};
   let totalCards = 0, totalValue = 0, priced = 0;
   cards.forEach(c => {
@@ -625,7 +626,33 @@ function showStats() {
   });
   html += `<tr class="tot"><td>Total</td><td class="num">${cards.length}</td><td class="num">${totalCards}</td><td class="num">$${money(totalValue)}</td></tr>`;
   $('statsTable').innerHTML = html;
-  $('statsDialog').showModal();
+}
+
+function setStatsStatus(msg, isErr, loading) {
+  renderStatus($('statsStatus'), msg, isErr, loading);
+}
+// Re-query Magic & Pokémon cards by name to fill/update their market price.
+async function refreshPrices() {
+  const targets = cards.filter(c => /magic|pok/i.test(c.game || ''));
+  if (!targets.length) { setStatsStatus('No Magic or Pokémon cards to price.', true); return; }
+  const btn = $('refreshPricesBtn');
+  btn.disabled = true;
+  let done = 0, updated = 0;
+  for (const c of targets) {
+    setStatsStatus(`Pricing ${++done}/${targets.length}… ${esc(c.name)}`, false, true);
+    try {
+      const hit = /magic/i.test(c.game) ? await lookupMTG(c.name) : await lookupPokemon(c.name);
+      if (hit && hit.price != null) {
+        await dataPut({ ...c, price: hit.price, updated: new Date().toISOString() });
+        updated++;
+      }
+    } catch { /* skip this card, keep going */ }
+    await new Promise(r => setTimeout(r, 120)); // be gentle on the free APIs
+  }
+  await reload();
+  btn.disabled = false;
+  renderStats();
+  setStatsStatus(`Updated ${updated} of ${targets.length} card prices.`);
 }
 
 // ---------- Sync dialog ----------
@@ -742,6 +769,7 @@ async function init() {
   $('saveNextBtn').onclick = () => save(true);
   $('statsBtn').onclick = showStats;
   $('statsCloseBtn').onclick = () => $('statsDialog').close();
+  $('refreshPricesBtn').onclick = refreshPrices;
   $('deleteBtn').onclick = removeCard;
   $('cancelBtn').onclick = () => { stopCamera(); $('cardDialog').close(); };
   $('cardDialog').addEventListener('close', stopCamera);

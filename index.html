@@ -110,9 +110,11 @@
       <h2>Collection stats</h2>
       <div id="statsTotals" class="statTotals"></div>
       <table id="statsTable" class="statTable"></table>
-      <p class="hint">Values are indicative market prices (USD) captured when each card was added —
-        re-look-up a card to refresh its price.</p>
+      <p class="hint">Values are indicative market prices (USD). Cards added before pricing existed
+        show $0 until refreshed.</p>
+      <div id="statsStatus" class="status" hidden></div>
       <div class="actions">
+        <button type="button" id="refreshPricesBtn">Refresh all prices</button>
         <button type="button" id="statsCloseBtn">Close</button>
       </div>
     </form>
