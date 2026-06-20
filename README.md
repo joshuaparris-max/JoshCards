@@ -1,36 +1,64 @@
 # JoshCards
 
-A phone-friendly card catalogue for Josh & Sylvie. Scan any card (Pokémon, Magic, Glade, custom games) with your phone camera and add it to a searchable database — by name, game, colour/type, cost, tags, and storage location.
+A phone-friendly card catalogue for Josh & Sylvie. Add Pokemon, Magic, Glade,
+custom games, and family card games by name, game, type/colour, cost, tags, and
+storage location.
 
 ## What it is
-- **Static web app / PWA** — no server, no accounts, no cost. Deploys to Vercel as-is.
-- **Camera capture** via the browser (`getUserMedia`) + photo/file fallback.
-- **Local database** in your browser (IndexedDB). Data lives on the device that scanned it.
-- **Add to home screen** on your phone for an app-like icon and offline use.
+
+- Static web app / PWA: no build step, deploys to Vercel as-is.
+- Local-first database in your browser using IndexedDB.
+- Name-first card lookup for Pokemon and Magic.
+- Optional camera/photo capture, with OCR as an opt-in helper.
+- Deck building, legality checks, and playtest exports.
+- Optional Supabase sync for sharing one collection across your own devices.
 
 ## Use
-Open the deployed URL on your phone → **+ Scan / Add** → Open camera → Capture → fill name/game/tags → Save.
-Search and filter from the top bar. **Export JSON** makes a backup; **Import JSON** restores or moves data to another device.
 
-## Online sync (optional — shares one database across devices)
-Without setup the app is local-only per device. To share one database:
+Open the deployed URL on your phone, then start with **Find by name**. Pick the
+matching printing, save it, and add storage/tags as needed. Use **Add manually**
+for custom cards or games that do not have an online card database.
 
-1. Create a free project at **supabase.com**.
-2. **SQL Editor → New query** → paste the contents of `supabase-setup.sql` → **Run**.
-3. **Project Settings → API** → copy the **Project URL** and the **anon public** key.
-4. In the app: **Sync** → paste both → **Test & sync now** → **Save**.
-5. Do the same paste on the other phone. Both now read/write the same data.
+Photos are optional. If you turn on "Try reading the card name from photos", the
+app will attempt OCR after capture, but typed name lookup is the most reliable
+path.
 
-It stays offline-capable: the local IndexedDB is a cache, and changes sync to Supabase when online.
+## Playtesting
 
-Security note: the included policy lets the anon key read/write the `cards` table — fine for a
-private family list. To lock it down, swap in authenticated-only policies + Supabase Auth.
+Build a Pokemon or Magic deck in **Decks**, then use **Playtest / export**.
+
+- MTG plain text works with Forge, Moxfield, and Untap.in.
+- MTG Arena export includes set and collector number when known.
+- Pokemon export targets Pokemon TCG Live and PTCG-sim.
+
+Older cards may need **Look up** or **Choose art** run again before exports can
+include set code and collector number.
+
+## Online Sync
+
+Without setup the app is local-only per device. To share one collection:
+
+1. Create your own Supabase project.
+2. In Supabase, run `supabase-setup.sql`.
+3. In the app, open **Sync**.
+4. Paste your Project URL and anon public key.
+5. Use the generated Collection ID on every device that should share the same collection.
+
+The Collection ID keeps separate collections apart inside the same Supabase
+project. Keep it private. The included RLS policy is still intentionally simple
+for a private family app; for stronger privacy, add Supabase Auth and
+authenticated-only policies.
 
 ## Deploy
-Static site, zero build. On Vercel: **Add New → Project → import this repo → Deploy** (Framework preset: *Other*).
+
+Static site, zero build. On Vercel: Add New -> Project -> import this repo ->
+Deploy. Framework preset: Other.
 
 ## Files
-- `index.html` / `styles.css` / `app.js` — the app
-- `manifest.webmanifest` / `sw.js` / `icons/` — PWA install + offline
-- `vercel.json` — static hosting config
-- `Card-Game-Tracker.xlsx` — original spreadsheet catalogue (kept for reference)
+
+- `index.html` / `styles.css` / `app.js`: the app
+- `catalog-data.js`: editable game and tag lists
+- `config.js`: optional built-in sync target
+- `manifest.webmanifest` / `sw.js` / `icons/`: PWA install and offline support
+- `supabase-setup.sql`: optional sync setup
+- `Card-Game-Tracker.xlsx`: original spreadsheet catalogue

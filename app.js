@@ -1,18 +1,9 @@
 // JoshCards — local-first card catalogue (IndexedDB + camera capture)
 'use strict';
 
-const GAMES = [
-  'Pokémon', 'Magic: The Gathering', 'Glade (Gilbert Walker)',
-  'Star Realms', 'Soul Talk', 'Family Roast', 'We Do (toddler)',
-  'The Mind', 'Monopoly Deal', 'Playing cards', 'Other'
-];
-
-// Controlled tag vocabulary — keeps colour/look/shape search clean.
-const TAGS = [
-  'red','blue','green','black','white','yellow','colourless','multicolour',
-  'foil','holo','full-art','proxy','round-corners','square-corners',
-  'oversized','token','basic','rare','common'
-];
+const CATALOG = window.JOSHCARDS_CATALOG || {};
+const GAMES = CATALOG.games || ['Pokemon', 'Magic: The Gathering', 'Other'];
+const TAGS = CATALOG.tags || ['foil', 'holo', 'rare', 'common'];
 
 // ---------- IndexedDB ----------
 let db;
@@ -43,36 +34,51 @@ function allDecksLocal() { return new Promise((res, rej) => { const r = dtx('rea
 
 // ---------- Online sync (Supabase REST) ----------
 function syncCfg() {
-  // In-app Sync dialog overrides; otherwise fall back to the built-in default (config.js).
+  // In-app Sync dialog overrides; otherwise fall back to an optional project default.
   try {
     const c = JSON.parse(localStorage.getItem('joshcards_sync') || 'null');
-    if (c && c.url && c.key) return c;
+    if (c && c.url && c.key) return { ...c, collection: c.collection || 'default' };
   } catch { /* ignore */ }
   const d = window.JOSHCARDS_SYNC;
-  return (d && d.url && d.key) ? d : null;
+  return (d && d.url && d.key) ? { ...d, collection: d.collection || 'default' } : null;
 }
-function saveSyncCfg(url, key) {
-  if (url && key) localStorage.setItem('joshcards_sync', JSON.stringify({ url: url.replace(/\/+$/, ''), key }));
+function cleanCollectionId(id) {
+  return (id || '').trim().replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 48) || makeCollectionId();
+}
+function makeCollectionId() {
+  return 'cards-' + Math.random().toString(36).slice(2, 10);
+}
+function saveSyncCfg(url, key, collection) {
+  if (url && key) {
+    localStorage.setItem('joshcards_sync', JSON.stringify({
+      url: url.replace(/\/+$/, ''),
+      key,
+      collection: cleanCollectionId(collection)
+    }));
+  }
   else localStorage.removeItem('joshcards_sync');
 }
 function sbHeaders(cfg) {
   return { apikey: cfg.key, Authorization: 'Bearer ' + cfg.key, 'Content-Type': 'application/json' };
 }
+function withCollection(cfg, row) {
+  return { ...row, collection_id: cleanCollectionId(cfg.collection) };
+}
 async function remoteGetAll(cfg) {
-  const r = await fetch(cfg.url + '/rest/v1/cards?select=*', { headers: sbHeaders(cfg) });
+  const r = await fetch(cfg.url + '/rest/v1/cards?select=*&collection_id=eq.' + encodeURIComponent(cleanCollectionId(cfg.collection)), { headers: sbHeaders(cfg) });
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return r.json();
 }
 async function remoteUpsert(cfg, card) {
-  const r = await fetch(cfg.url + '/rest/v1/cards', {
+  const r = await fetch(cfg.url + '/rest/v1/cards?on_conflict=collection_id,id', {
     method: 'POST',
     headers: { ...sbHeaders(cfg), Prefer: 'resolution=merge-duplicates' },
-    body: JSON.stringify(card)
+    body: JSON.stringify(withCollection(cfg, card))
   });
   if (!r.ok) throw new Error('HTTP ' + r.status);
 }
 async function remoteDelete(cfg, id) {
-  const r = await fetch(cfg.url + '/rest/v1/cards?id=eq.' + encodeURIComponent(id), {
+  const r = await fetch(cfg.url + '/rest/v1/cards?collection_id=eq.' + encodeURIComponent(cleanCollectionId(cfg.collection)) + '&id=eq.' + encodeURIComponent(id), {
     method: 'DELETE', headers: sbHeaders(cfg)
   });
   if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -149,19 +155,19 @@ function cardMeta(c) {
 
 // ---------- Deck storage (local + Supabase 'decks' table) ----------
 async function remoteGetDecks(cfg) {
-  const r = await fetch(cfg.url + '/rest/v1/decks?select=*', { headers: sbHeaders(cfg) });
+  const r = await fetch(cfg.url + '/rest/v1/decks?select=*&collection_id=eq.' + encodeURIComponent(cleanCollectionId(cfg.collection)), { headers: sbHeaders(cfg) });
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return r.json();
 }
 async function remoteUpsertDeck(cfg, deck) {
-  const r = await fetch(cfg.url + '/rest/v1/decks', {
+  const r = await fetch(cfg.url + '/rest/v1/decks?on_conflict=collection_id,id', {
     method: 'POST', headers: { ...sbHeaders(cfg), Prefer: 'resolution=merge-duplicates' },
-    body: JSON.stringify(deck)
+    body: JSON.stringify(withCollection(cfg, deck))
   });
   if (!r.ok) throw new Error('HTTP ' + r.status);
 }
 async function remoteDeleteDeck(cfg, id) {
-  const r = await fetch(cfg.url + '/rest/v1/decks?id=eq.' + encodeURIComponent(id), {
+  const r = await fetch(cfg.url + '/rest/v1/decks?collection_id=eq.' + encodeURIComponent(cleanCollectionId(cfg.collection)) + '&id=eq.' + encodeURIComponent(id), {
     method: 'DELETE', headers: sbHeaders(cfg)
   });
   if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -218,6 +224,7 @@ function render() {
   $('count').textContent = `${list.length} / ${cards.length} cards`;
   const grid = $('grid');
   grid.innerHTML = '';
+  $('emptyState').hidden = cards.length > 0 || q || fg || ft;
   list.forEach(c => {
     const el = document.createElement('div');
     el.className = 'card';
@@ -309,7 +316,7 @@ function capture() {
   currentImage = cv.toDataURL('image/jpeg', 0.8);
   stopCamera();
   showPreview(currentImage);
-  autoScan();
+  maybeAutoScan();
 }
 function fileToImage(file) {
   const reader = new FileReader();
@@ -322,7 +329,7 @@ function fileToImage(file) {
       cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
       currentImage = cv.toDataURL('image/jpeg', 0.8);
       showPreview(currentImage);
-      autoScan();
+      maybeAutoScan();
     };
     img.src = reader.result;
   };
@@ -330,6 +337,16 @@ function fileToImage(file) {
 }
 
 // ---------- OCR + database lookup (autofill) ----------
+function ocrEnabled() {
+  return localStorage.getItem('joshcards_ocr') === '1';
+}
+function setOcrEnabled(enabled) {
+  localStorage.setItem('joshcards_ocr', enabled ? '1' : '0');
+}
+function maybeAutoScan() {
+  if (ocrEnabled()) autoScan();
+  else setStatus('Photo added. Type the card name or use Find by name for better matches.');
+}
 function setStatus(msg, isErr, loading, onCancel) {
   renderStatus($('scanStatus'), msg, isErr, loading, onCancel);
 }
@@ -720,7 +737,7 @@ async function reload() {
   }
   cards = (await allCards()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   render();
-  $('syncBtn').textContent = cfg ? 'Sync ✓' : 'Sync';
+  $('syncBtn').textContent = cfg ? 'Synced' : 'Sync';
 }
 
 // ---------- Import / export ----------
@@ -1074,25 +1091,28 @@ function openSync() {
   const cfg = syncCfg();
   $('s_url').value = cfg?.url || '';
   $('s_key').value = cfg?.key || '';
-  setSyncStatus(cfg ? 'Sync is on.' : '');
+  $('s_collection').value = cfg?.collection || makeCollectionId();
+  setSyncStatus(cfg ? 'Sync is on for collection ' + cleanCollectionId(cfg.collection) + '.' : 'Sync is off. Add your own Supabase project to share across devices.');
   $('syncDialog').showModal();
 }
 async function testSync() {
   const url = $('s_url').value.trim().replace(/\/+$/, ''), key = $('s_key').value.trim();
+  const collection = cleanCollectionId($('s_collection').value);
+  $('s_collection').value = collection;
   if (!url || !key) { setSyncStatus('Enter both URL and key.', true); return; }
-  setSyncStatus('Testing…');
+  setSyncStatus('Testing...');
   try {
-    const rows = await remoteGetAll({ url, key });
-    saveSyncCfg(url, key);
+    const rows = await remoteGetAll({ url, key, collection });
+    saveSyncCfg(url, key, collection);
     // push anything local that isn't on the server yet
-    for (const c of await allCards()) await remoteUpsert({ url, key }, c);
+    for (const c of await allCards()) await remoteUpsert({ url, key, collection }, c);
+    for (const d of await allDecksLocal()) await remoteUpsertDeck({ url, key, collection }, d);
     await reload();
-    setSyncStatus(`Connected ✓ — ${rows.length} cards on server, local cards uploaded.`);
+    setSyncStatus(`Connected - ${rows.length} cards in this collection, local cards uploaded.`);
   } catch (e) {
-    setSyncStatus('Failed: ' + e.message + ' — check URL, key, and that the cards table exists.', true);
+    setSyncStatus('Failed: ' + e.message + ' - check URL, key, Collection ID, and the setup SQL.', true);
   }
 }
-
 // ---------- Duplicates ----------
 function setDupStatus(msg, isErr) {
   const s = $('dupStatus');
@@ -1162,6 +1182,8 @@ async function init() {
 
   $('addBtn').onclick = () => openDialog(null);
   $('findBtn').onclick = () => { setFindStatus(''); $('findResults').innerHTML = ''; $('findDialog').showModal(); };
+  $('emptyAddBtn').onclick = () => openDialog(null);
+  $('emptyFindBtn').onclick = () => { setFindStatus(''); $('findResults').innerHTML = ''; $('findDialog').showModal(); };
   $('findGoBtn').onclick = runFind;
   $('find_name').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runFind(); } });
   $('findCloseBtn').onclick = () => $('findDialog').close();
@@ -1171,6 +1193,8 @@ async function init() {
   $('camBtn').onclick = startCamera;
   $('shotBtn').onclick = capture;
   $('fileInput').onchange = (e) => e.target.files[0] && fileToImage(e.target.files[0]);
+  $('ocrToggle').checked = ocrEnabled();
+  $('ocrToggle').onchange = () => setOcrEnabled($('ocrToggle').checked);
   $('lookupBtn').onclick = lookup;
   $('priceLookupBtn').onclick = openPriceSearch;
   $('artBtn').onclick = openArtPicker;
@@ -1202,7 +1226,7 @@ async function init() {
   $('dupMatch').onchange = renderDuplicates;
   $('dupCloseBtn').onclick = () => $('dupDialog').close();
   $('syncBtn').onclick = openSync;
-  $('syncSaveBtn').onclick = () => { saveSyncCfg($('s_url').value.trim(), $('s_key').value.trim()); reload(); $('syncDialog').close(); };
+  $('syncSaveBtn').onclick = () => { saveSyncCfg($('s_url').value.trim(), $('s_key').value.trim(), $('s_collection').value.trim()); reload(); $('syncDialog').close(); };
   $('syncCloseBtn').onclick = () => $('syncDialog').close();
   $('syncTestBtn').onclick = testSync;
   $('exportBtn').onclick = exportJSON;
