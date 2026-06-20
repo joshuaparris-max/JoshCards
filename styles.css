@@ -7,6 +7,8 @@
   --muted:#5b6675; --accent:#3866e0; --danger:#d6334a;
 }
 *{box-sizing:border-box}
+/* The hidden attribute must always win over display rules from classes below. */
+[hidden]{display:none!important}
 body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
   background:var(--bg);color:var(--text);padding-bottom:78px}
 header{display:flex;align-items:center;justify-content:space-between;
