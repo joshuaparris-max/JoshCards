@@ -270,6 +270,15 @@ function render() {
 }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m])); }
 
+// "What should we play?" — pick a random game you actually own cards for.
+function randomGame() {
+  const owned = [...new Set(cards.filter(c => !c.meta?.wishlist).map(c => c.game).filter(Boolean))];
+  const pool = owned.length ? owned : (window.JOSHCARDS_CATALOG?.games || []);
+  if (!pool.length) { alert('Add some cards first!'); return; }
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  alert('🎲 Tonight, play:\n\n' + pick);
+}
+
 function applyTheme(t) {
   if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
   else document.documentElement.removeAttribute('data-theme');
@@ -1331,6 +1340,7 @@ async function init() {
   $('sortBy').onchange = render;
   applyTheme(localStorage.getItem('joshcards_theme') || 'dark');
   $('themeBtn').onclick = () => applyTheme(document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
+  $('randomBtn').onclick = randomGame;
   $('detailCloseBtn').onclick = () => $('detailDialog').close();
   $('detailEditBtn').onclick = () => { $('detailDialog').close(); openDialog(detailCard); };
   $('camBtn').onclick = startCamera;
