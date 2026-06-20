@@ -40,9 +40,15 @@
             <input id="fileInput" type="file" accept="image/*" capture="environment" hidden />
           </label>
         </div>
+        <div id="scanStatus" class="status" hidden></div>
       </div>
 
-      <label>Name <input id="f_name" type="text" required /></label>
+      <label>Name
+        <span class="nameRow">
+          <input id="f_name" type="text" required />
+          <button type="button" id="lookupBtn" title="Look up by name">Look up</button>
+        </span>
+      </label>
       <label>Game
         <select id="f_game"></select>
       </label>
@@ -70,6 +76,7 @@
     <label class="fileBtn small">Import JSON<input id="importInput" type="file" accept="application/json" hidden /></label>
   </footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

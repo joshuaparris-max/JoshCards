@@ -90,6 +90,7 @@ function openDialog(card) {
   currentImage = card?.image || null;
   showPreview(currentImage);
   renderChips(card?.tags || []);
+  setStatus('');
   $('deleteBtn').hidden = !card;
   $('cardDialog').showModal();
 }
@@ -146,6 +147,7 @@ function capture() {
   currentImage = cv.toDataURL('image/jpeg', 0.8);
   stopCamera();
   showPreview(currentImage);
+  autoScan();
 }
 function fileToImage(file) {
   const reader = new FileReader();
@@ -158,10 +160,112 @@ function fileToImage(file) {
       cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
       currentImage = cv.toDataURL('image/jpeg', 0.8);
       showPreview(currentImage);
+      autoScan();
     };
     img.src = reader.result;
   };
   reader.readAsDataURL(file);
+}
+
+// ---------- OCR + database lookup (autofill) ----------
+function setStatus(msg, isErr) {
+  const s = $('scanStatus');
+  if (!msg) { s.hidden = true; s.textContent = ''; return; }
+  s.hidden = false; s.textContent = msg;
+  s.classList.toggle('err', !!isErr);
+}
+
+// Read the card name off the photo, then enrich from the right card database.
+async function autoScan() {
+  if (!currentImage) return;
+  let name = '';
+  if (window.Tesseract) {
+    try {
+      setStatus('Reading card…');
+      const { data } = await Tesseract.recognize(currentImage, 'eng');
+      name = bestNameLine(data.text);
+      if (name) $('f_name').value = name;
+    } catch (e) {
+      setStatus('Could not read text — type the name and tap Look up.', true);
+    }
+  }
+  // Use OCR result (or whatever's already typed) to enrich from the DB.
+  await lookup();
+}
+
+// Pick the most name-like line: top-most line with a few letters, skip noise.
+function bestNameLine(text) {
+  const lines = (text || '').split('\n')
+    .map(l => l.replace(/[^A-Za-z0-9 ',.-]/g, '').trim())
+    .filter(l => l.replace(/[^A-Za-z]/g, '').length >= 3);
+  return lines[0] || '';
+}
+
+// Enrich fields from the free database matching the chosen game.
+async function lookup() {
+  const game = $('f_game').value;
+  const name = $('f_name').value.trim();
+  if (!name) { setStatus('Type a name first, then Look up.', true); return; }
+  try {
+    let hit = null;
+    if (/magic/i.test(game)) hit = await lookupMTG(name);
+    else if (/pok/i.test(game)) hit = await lookupPokemon(name);
+    else { setStatus('No card database for this game — keeping your photo & name.'); return; }
+
+    if (!hit) { setStatus('No match found — check the name and Look up again.', true); return; }
+    applyHit(hit);
+    setStatus('Filled from ' + hit.source + ' ✓');
+  } catch (e) {
+    setStatus('Lookup failed (offline?). Fields stay editable.', true);
+  }
+}
+
+function applyHit(h) {
+  $('f_name').value = h.name || $('f_name').value;
+  if (h.type) $('f_type').value = h.type;
+  if (h.cost) $('f_cost').value = h.cost;
+  if (h.power) $('f_power').value = h.power;
+  if (h.rarity) $('f_rarity').value = h.rarity;
+  if (h.image) { currentImage = h.image; showPreview(currentImage); }
+}
+
+// Scryfall — Magic: The Gathering (free, no key, fuzzy name match)
+async function lookupMTG(name) {
+  const r = await fetch('https://api.scryfall.com/cards/named?fuzzy=' + encodeURIComponent(name));
+  if (!r.ok) return null;
+  const c = await r.json();
+  if (c.object === 'error') return null;
+  const colours = (c.colors && c.colors.length) ? c.colors.join('') : 'Colourless';
+  return {
+    source: 'Scryfall',
+    name: c.name,
+    type: c.type_line || colours,
+    cost: c.mana_cost || '',
+    power: (c.power && c.toughness) ? `${c.power}/${c.toughness}` : '',
+    rarity: c.rarity || '',
+    image: c.image_uris ? c.image_uris.normal : (c.card_faces?.[0]?.image_uris?.normal || null)
+  };
+}
+
+// Pokémon TCG API (free, no key needed for light use)
+async function lookupPokemon(name) {
+  const url = 'https://api.pokemontcg.io/v2/cards?pageSize=1&q=' +
+    encodeURIComponent('name:"' + name + '"');
+  const r = await fetch(url);
+  if (!r.ok) return null;
+  const j = await r.json();
+  const c = j.data && j.data[0];
+  if (!c) return null;
+  const cost = c.attacks && c.attacks[0] && c.attacks[0].cost ? c.attacks[0].cost.join(' ') : '';
+  return {
+    source: 'Pokémon TCG',
+    name: c.name,
+    type: (c.types || []).join(', '),
+    cost,
+    power: c.hp ? 'HP ' + c.hp : '',
+    rarity: c.rarity || '',
+    image: c.images ? c.images.large : null
+  };
 }
 
 // ---------- Save / delete ----------
@@ -230,6 +334,7 @@ async function init() {
   $('camBtn').onclick = startCamera;
   $('shotBtn').onclick = capture;
   $('fileInput').onchange = (e) => e.target.files[0] && fileToImage(e.target.files[0]);
+  $('lookupBtn').onclick = lookup;
   $('saveBtn').onclick = save;
   $('deleteBtn').onclick = removeCard;
   $('cancelBtn').onclick = () => { stopCamera(); $('cardDialog').close(); };
