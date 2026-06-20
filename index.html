@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f1115" />
+  <title>JoshCards — Card Catalogue</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>JoshCards</h1>
+    <button id="addBtn" class="primary">+ Scan / Add</button>
+  </header>
+
+  <section id="controls">
+    <input id="search" type="search" placeholder="Search name, tags, location…" />
+    <select id="filterGame"><option value="">All games</option></select>
+    <select id="filterTag"><option value="">All tags</option></select>
+    <span id="count" class="count"></span>
+  </section>
+
+  <main id="grid" class="grid"></main>
+
+  <!-- Add / edit dialog -->
+  <dialog id="cardDialog">
+    <form method="dialog" id="cardForm">
+      <h2 id="dialogTitle">Add card</h2>
+
+      <div class="capture">
+        <video id="video" playsinline autoplay muted hidden></video>
+        <img id="preview" alt="card preview" hidden />
+        <canvas id="canvas" hidden></canvas>
+        <div class="capRow">
+          <button type="button" id="camBtn">Open camera</button>
+          <button type="button" id="shotBtn" hidden>Capture</button>
+          <label class="fileBtn">Photo / file
+            <input id="fileInput" type="file" accept="image/*" capture="environment" hidden />
+          </label>
+        </div>
+      </div>
+
+      <label>Name <input id="f_name" type="text" required /></label>
+      <label>Game
+        <select id="f_game"></select>
+      </label>
+      <label>Type / Colour <input id="f_type" type="text" placeholder="Fire, Blue, …" /></label>
+      <label>Cost (energy / mana) <input id="f_cost" type="text" /></label>
+      <label>Power / HP <input id="f_power" type="text" /></label>
+      <label>Rarity / Brand <input id="f_rarity" type="text" /></label>
+      <label>Quantity <input id="f_qty" type="number" min="1" value="1" /></label>
+      <label>Storage location <input id="f_loc" type="text" placeholder="Box A, shelf…" /></label>
+      <label>Tags
+        <input id="f_tags" type="text" placeholder="holo, round-corners, foil…" />
+      </label>
+      <div id="tagChips" class="chips"></div>
+
+      <div class="actions">
+        <button type="button" id="deleteBtn" class="danger" hidden>Delete</button>
+        <button type="button" id="cancelBtn">Cancel</button>
+        <button type="button" id="saveBtn" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <footer>
+    <button id="exportBtn">Export JSON</button>
+    <label class="fileBtn small">Import JSON<input id="importInput" type="file" accept="application/json" hidden /></label>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
