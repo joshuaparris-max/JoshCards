@@ -1390,6 +1390,20 @@ async function init() {
   $('exportBtn').onclick = exportJSON;
   $('importInput').onchange = (e) => e.target.files[0] && importJSON(e.target.files[0]);
 
+  // Add-to-home-screen helper (Chrome/Android).
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    if (localStorage.getItem('joshcards_install_dismissed')) return;
+    deferredPrompt = e;
+    $('installBanner').hidden = false;
+  });
+  $('installBtn').onclick = async () => {
+    $('installBanner').hidden = true;
+    if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt = null; }
+  };
+  $('installDismiss').onclick = () => { $('installBanner').hidden = true; localStorage.setItem('joshcards_install_dismissed', '1'); };
+
   // When the connection comes back, flush queued changes and refresh.
   window.addEventListener('online', () => reload());
 

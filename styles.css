@@ -38,6 +38,10 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
 .count{color:var(--muted);font-size:13px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
   gap:12px;padding:0 16px}
+.installBanner{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  margin:10px 16px;padding:10px 12px;background:var(--panel);border:1px solid var(--accent);border-radius:10px;font-size:13px}
+.installBanner .ibtns{display:flex;gap:8px}
+.installBanner button{padding:6px 12px;font-size:13px}
 .gridHeader{grid-column:1/-1;font-weight:700;font-size:15px;color:var(--accent);
   padding:10px 2px 2px;border-bottom:1px solid var(--line)}
 .emptyState{max-width:520px;margin:40px auto;padding:0 20px;text-align:center}
