@@ -9,6 +9,7 @@ create table if not exists public.cards (
   cost      text,
   power     text,
   rarity    text,
+  price     numeric,
   qty       integer default 1,
   location  text,
   tags      jsonb default '[]'::jsonb,
