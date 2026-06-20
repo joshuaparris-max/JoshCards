@@ -270,6 +270,13 @@ function render() {
 }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m])); }
 
+function applyTheme(t) {
+  if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  else document.documentElement.removeAttribute('data-theme');
+  localStorage.setItem('joshcards_theme', t);
+  const btn = $('themeBtn'); if (btn) btn.textContent = t === 'light' ? '☀️' : '🌙';
+}
+
 // Card detail view (tap a card). Edit button drops into the editor.
 let detailCard = null;
 function openDetail(c) {
@@ -1322,6 +1329,8 @@ async function init() {
   $('filterTag').onchange = render;
   $('filterOwn').onchange = render;
   $('sortBy').onchange = render;
+  applyTheme(localStorage.getItem('joshcards_theme') || 'dark');
+  $('themeBtn').onclick = () => applyTheme(document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
   $('detailCloseBtn').onclick = () => $('detailDialog').close();
   $('detailEditBtn').onclick = () => { $('detailDialog').close(); openDialog(detailCard); };
   $('camBtn').onclick = startCamera;
