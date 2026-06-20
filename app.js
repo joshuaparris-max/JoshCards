@@ -155,6 +155,7 @@ function render() {
     el.innerHTML = `${img}<div class="body">
       <div class="name">${esc(c.name)}${c.qty > 1 ? ` ×${c.qty}` : ''}</div>
       <div class="meta">${esc(c.game || '')}${c.location ? ' · ' + esc(c.location) : ''}</div>
+      ${c.price != null ? `<div class="price">$${money(c.price * (c.qty || 1))}${c.qty > 1 ? ` ($${money(c.price)} ea)` : ''}</div>` : ''}
     </div>`;
     grid.append(el);
   });
@@ -171,6 +172,7 @@ function openDialog(card) {
   $('f_cost').value = card?.cost || '';
   $('f_power').value = card?.power || '';
   $('f_rarity').value = card?.rarity || '';
+  $('f_price').value = card?.price != null ? card.price : '';
   $('f_qty').value = card?.qty || 1;
   $('f_loc').value = card?.location || '';
   $('f_tags').value = (card?.tags || []).join(', ');
@@ -337,6 +339,7 @@ function applyHit(h) {
   if (h.cost) $('f_cost').value = h.cost;
   if (h.power) $('f_power').value = h.power;
   if (h.rarity) $('f_rarity').value = h.rarity;
+  if (h.price != null) $('f_price').value = h.price;
   if (h.image) { currentImage = h.image; showPreview(currentImage); }
 }
 
@@ -351,10 +354,18 @@ function mapMTG(c) {
     cost: c.mana_cost || '',
     power: (c.power && c.toughness) ? `${c.power}/${c.toughness}` : '',
     rarity: c.rarity || '',
+    price: c.prices ? parseFloat(c.prices.usd || c.prices.usd_foil) || null : null,
     image: uris.normal || null,
     thumb: uris.small || uris.normal || null,
     sub: [c.set_name, c.rarity].filter(Boolean).join(' · ')
   };
+}
+// Pick a market price (USD) from a Pokémon card's TCGPlayer block.
+function pokePrice(c) {
+  const p = c.tcgplayer && c.tcgplayer.prices;
+  if (!p) return null;
+  for (const k of Object.keys(p)) { if (p[k] && p[k].market) return p[k].market; }
+  return null;
 }
 function mapPokemon(c) {
   const cost = c.attacks && c.attacks[0] && c.attacks[0].cost ? c.attacks[0].cost.join(' ') : '';
@@ -365,6 +376,7 @@ function mapPokemon(c) {
     cost,
     power: c.hp ? 'HP ' + c.hp : '',
     rarity: c.rarity || '',
+    price: pokePrice(c),
     image: c.images ? c.images.large : null,
     thumb: c.images ? c.images.small : null,
     sub: [c.set?.name, c.rarity].filter(Boolean).join(' · ')
@@ -506,7 +518,7 @@ function setFindStatus(msg, isErr, loading, onCancel) {
 }
 
 // ---------- Save / delete ----------
-async function save() {
+async function save(next) {
   const name = $('f_name').value.trim();
   if (!name) { $('f_name').focus(); return; }
   const card = {
@@ -517,6 +529,7 @@ async function save() {
     cost: $('f_cost').value.trim(),
     power: $('f_power').value.trim(),
     rarity: $('f_rarity').value.trim(),
+    price: $('f_price').value !== '' ? parseFloat($('f_price').value) : null,
     qty: parseInt($('f_qty').value, 10) || 1,
     location: $('f_loc').value.trim(),
     tags: parseTags($('f_tags').value),
@@ -529,8 +542,15 @@ async function save() {
     alert('Saved locally, but online sync failed: ' + e.message + '\nIt will need re-saving when sync works.');
   }
   await reload();
-  $('cardDialog').close();
+  if (next) {
+    // Rapid batch mode: straight into a fresh card with the camera open.
+    openDialog(null);
+    startCamera();
+  } else {
+    $('cardDialog').close();
+  }
 }
+function money(n) { return (Math.round(n * 100) / 100).toFixed(2); }
 async function removeCard() {
   if (editingId && confirm('Delete this card?')) {
     try { await dataDelete(editingId); }
@@ -579,6 +599,33 @@ async function importJSON(file) {
   for (const c of arr) { if (c && c.id) await dataPut(c); }
   await reload();
   alert('Imported ' + arr.length + ' cards.');
+}
+
+// ---------- Collection dashboard ----------
+function showStats() {
+  const byGame = {};
+  let totalCards = 0, totalValue = 0, priced = 0;
+  cards.forEach(c => {
+    const g = c.game || 'Other';
+    const qty = c.qty || 1;
+    const val = (c.price != null ? c.price : 0) * qty;
+    byGame[g] ||= { rows: 0, qty: 0, value: 0 };
+    byGame[g].rows++; byGame[g].qty += qty; byGame[g].value += val;
+    totalCards += qty; totalValue += val;
+    if (c.price != null) priced += qty;
+  });
+  $('statsTotals').innerHTML = `
+    <div class="box"><div class="big">${cards.length}</div><div class="lbl">unique cards</div></div>
+    <div class="box"><div class="big">${totalCards}</div><div class="lbl">total (incl. qty)</div></div>
+    <div class="box"><div class="big">$${money(totalValue)}</div><div class="lbl">est. value</div></div>`;
+  const games = Object.entries(byGame).sort((a, b) => b[1].value - a[1].value);
+  let html = '<tr><th>Game</th><th class="num">Unique</th><th class="num">Total</th><th class="num">Value</th></tr>';
+  games.forEach(([g, s]) => {
+    html += `<tr><td>${esc(g)}</td><td class="num">${s.rows}</td><td class="num">${s.qty}</td><td class="num">$${money(s.value)}</td></tr>`;
+  });
+  html += `<tr class="tot"><td>Total</td><td class="num">${cards.length}</td><td class="num">${totalCards}</td><td class="num">$${money(totalValue)}</td></tr>`;
+  $('statsTable').innerHTML = html;
+  $('statsDialog').showModal();
 }
 
 // ---------- Sync dialog ----------
@@ -691,7 +738,10 @@ async function init() {
   $('lookupBtn').onclick = lookup;
   $('artBtn').onclick = openArtPicker;
   $('artCloseBtn').onclick = () => $('artDialog').close();
-  $('saveBtn').onclick = save;
+  $('saveBtn').onclick = () => save(false);
+  $('saveNextBtn').onclick = () => save(true);
+  $('statsBtn').onclick = showStats;
+  $('statsCloseBtn').onclick = () => $('statsDialog').close();
   $('deleteBtn').onclick = removeCard;
   $('cancelBtn').onclick = () => { stopCamera(); $('cardDialog').close(); };
   $('cardDialog').addEventListener('close', stopCamera);

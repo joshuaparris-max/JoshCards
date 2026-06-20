@@ -80,6 +80,7 @@
       <label>Cost (energy / mana) <input id="f_cost" type="text" /></label>
       <label>Power / HP <input id="f_power" type="text" /></label>
       <label>Rarity / Brand <input id="f_rarity" type="text" /></label>
+      <label>Price each (USD) <input id="f_price" type="number" min="0" step="0.01" placeholder="0.00" /></label>
       <label>Quantity <input id="f_qty" type="number" min="1" value="1" /></label>
       <label>Storage location <input id="f_loc" type="text" placeholder="Box A, shelf…" /></label>
       <label>Tags
@@ -90,17 +91,32 @@
       <div class="actions">
         <button type="button" id="deleteBtn" class="danger" hidden>Delete</button>
         <button type="button" id="cancelBtn">Cancel</button>
+        <button type="button" id="saveNextBtn">Save &amp; scan next</button>
         <button type="button" id="saveBtn" class="primary">Save</button>
       </div>
     </form>
   </dialog>
 
   <footer>
+    <button id="statsBtn">Stats</button>
     <button id="dupBtn">Duplicates</button>
     <button id="syncBtn">Sync</button>
     <button id="exportBtn">Export JSON</button>
     <label class="fileBtn small">Import JSON<input id="importInput" type="file" accept="application/json" hidden /></label>
   </footer>
+
+  <dialog id="statsDialog">
+    <form method="dialog" id="statsForm">
+      <h2>Collection stats</h2>
+      <div id="statsTotals" class="statTotals"></div>
+      <table id="statsTable" class="statTable"></table>
+      <p class="hint">Values are indicative market prices (USD) captured when each card was added —
+        re-look-up a card to refresh its price.</p>
+      <div class="actions">
+        <button type="button" id="statsCloseBtn">Close</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="artDialog">
     <form method="dialog" id="artForm">

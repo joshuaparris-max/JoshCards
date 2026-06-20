@@ -40,6 +40,16 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
 .card .body{padding:8px}
 .card .name{font-weight:600;font-size:14px;line-height:1.2}
 .card .meta{color:var(--muted);font-size:12px;margin-top:2px}
+.card .price{color:#4ad991;font-size:12px;font-weight:600;margin-top:2px}
+.statTotals{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.statTotals .box{flex:1;min-width:90px;background:var(--bg);border:1px solid var(--line);
+  border-radius:10px;padding:10px;text-align:center}
+.statTotals .big{font-size:22px;font-weight:700}
+.statTotals .lbl{font-size:11px;color:var(--muted)}
+.statTable{width:100%;border-collapse:collapse;font-size:14px}
+.statTable th,.statTable td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+.statTable td.num,.statTable th.num{text-align:right}
+.statTable tr.tot td{font-weight:700;border-top:2px solid var(--line)}
 .card .qty{position:absolute}
 dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);
   border-radius:16px;width:min(480px,94vw);padding:18px}
