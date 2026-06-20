@@ -247,6 +247,10 @@ function render() {
   const grid = $('grid');
   grid.innerHTML = '';
   $('emptyState').hidden = cards.length > 0 || q || fg || ft;
+  if (cards.length && !list.length) {
+    grid.innerHTML = '<p class="hint" style="grid-column:1/-1;text-align:center;padding:24px">No cards match your filters.</p>';
+    return;
+  }
   let lastGame = null;
   list.forEach(c => {
     if (sort === 'game' && c.game !== lastGame) {
