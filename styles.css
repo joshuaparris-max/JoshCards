@@ -52,8 +52,13 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 #video,#preview{width:100%;max-height:300px;object-fit:contain;border-radius:10px;background:#000}
 .capRow{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
 .hint{font-size:13px;color:var(--muted);margin:0 0 4px}
-.status{font-size:13px;color:var(--accent);min-height:18px;text-align:center}
+.status{font-size:13px;color:var(--accent);min-height:18px;text-align:center;
+  display:flex;gap:8px;align-items:center;justify-content:center}
 .status.err{color:var(--danger)}
+.spinner{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);
+  border-radius:50%;animation:spin .7s linear infinite;flex:0 0 auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+button[disabled]{opacity:.5;cursor:default}
 .nameRow{display:flex;gap:6px}
 .nameRow input{flex:1}
 #lookupBtn{white-space:nowrap;padding:8px 12px}

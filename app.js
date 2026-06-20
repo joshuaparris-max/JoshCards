@@ -255,10 +255,12 @@ function fileToImage(file) {
 }
 
 // ---------- OCR + database lookup (autofill) ----------
-function setStatus(msg, isErr) {
+function setStatus(msg, isErr, loading) {
   const s = $('scanStatus');
-  if (!msg) { s.hidden = true; s.textContent = ''; return; }
-  s.hidden = false; s.textContent = msg;
+  if (!msg) { s.hidden = true; s.innerHTML = ''; return; }
+  s.hidden = false;
+  s.innerHTML = (loading ? '<span class="spinner"></span>' : '') + '<span></span>';
+  s.lastChild.textContent = msg;
   s.classList.toggle('err', !!isErr);
 }
 
@@ -268,8 +270,14 @@ async function autoScan() {
   let name = '';
   if (window.Tesseract) {
     try {
-      setStatus('Reading card…');
-      const { data } = await Tesseract.recognize(currentImage, 'eng');
+      setStatus('Reading card…', false, true);
+      const { data } = await Tesseract.recognize(currentImage, 'eng', {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            setStatus('Reading card… ' + Math.round(m.progress * 100) + '%', false, true);
+          }
+        }
+      });
       name = bestNameLine(data.text);
       if (name) $('f_name').value = name;
     } catch (e) {
@@ -293,10 +301,12 @@ async function lookup() {
   const game = $('f_game').value;
   const name = $('f_name').value.trim();
   if (!name) { setStatus('Type a name first, then Look up.', true); return; }
+  const btn = $('lookupBtn');
+  btn.disabled = true;
   try {
     let hit = null;
-    if (/magic/i.test(game)) hit = await lookupMTG(name);
-    else if (/pok/i.test(game)) hit = await lookupPokemon(name);
+    if (/magic/i.test(game)) { setStatus('Searching Scryfall…', false, true); hit = await lookupMTG(name); }
+    else if (/pok/i.test(game)) { setStatus('Searching Pokémon TCG…', false, true); hit = await lookupPokemon(name); }
     else { setStatus('No card database for this game — keeping your photo & name.'); return; }
 
     if (!hit) { setStatus('No match found — check the name and Look up again.', true); return; }
@@ -304,6 +314,8 @@ async function lookup() {
     setStatus('Filled from ' + hit.source + ' ✓');
   } catch (e) {
     setStatus('Lookup failed (offline?). Fields stay editable.', true);
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -393,7 +405,9 @@ async function runFind() {
     setFindStatus('Find-by-name only works for Magic & Pokémon (no database for others).', true);
     return;
   }
-  setFindStatus('Searching ' + game + '…');
+  const goBtn = $('findGoBtn');
+  goBtn.disabled = true;
+  setFindStatus('Searching ' + game + '…', false, true);
   try {
     const hits = /magic/i.test(game) ? await searchMTG(name) : await searchPokemon(name);
     if (!hits.length) { setFindStatus('No matches.', true); return; }
@@ -414,12 +428,17 @@ async function runFind() {
     });
   } catch (e) {
     setFindStatus('Search failed (offline?).', true);
+  } finally {
+    $('findGoBtn').disabled = false;
   }
 }
-function setFindStatus(msg, isErr) {
+function setFindStatus(msg, isErr, loading) {
   const s = $('findStatus');
-  if (!msg) { s.hidden = true; return; }
-  s.hidden = false; s.textContent = msg; s.classList.toggle('err', !!isErr);
+  if (!msg) { s.hidden = true; s.innerHTML = ''; return; }
+  s.hidden = false;
+  s.innerHTML = (loading ? '<span class="spinner"></span>' : '') + '<span></span>';
+  s.lastChild.textContent = msg;
+  s.classList.toggle('err', !!isErr);
 }
 
 // ---------- Save / delete ----------
