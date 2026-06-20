@@ -95,10 +95,30 @@
   </dialog>
 
   <footer>
+    <button id="dupBtn">Duplicates</button>
     <button id="syncBtn">Sync</button>
     <button id="exportBtn">Export JSON</button>
     <label class="fileBtn small">Import JSON<input id="importInput" type="file" accept="application/json" hidden /></label>
   </footer>
+
+  <dialog id="dupDialog">
+    <form method="dialog" id="dupForm">
+      <h2>Duplicates</h2>
+      <p class="hint">Grouped by name + game. Merge keeps one copy and adds the quantities together;
+        or delete individual copies.</p>
+      <label>Match by
+        <select id="dupMatch">
+          <option value="ng">Name + game</option>
+          <option value="n">Name only</option>
+        </select>
+      </label>
+      <div id="dupStatus" class="status" hidden></div>
+      <div id="dupResults" class="results"></div>
+      <div class="actions">
+        <button type="button" id="dupCloseBtn">Close</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="syncDialog">
     <form method="dialog" id="syncForm">

@@ -527,6 +527,64 @@ async function testSync() {
   }
 }
 
+// ---------- Duplicates ----------
+function setDupStatus(msg, isErr) {
+  const s = $('dupStatus');
+  if (!msg) { s.hidden = true; return; }
+  s.hidden = false; s.textContent = msg; s.classList.toggle('err', !!isErr);
+}
+function dupKey(c, mode) {
+  const n = (c.name || '').trim().toLowerCase();
+  return mode === 'n' ? n : n + '|' + (c.game || '');
+}
+function renderDuplicates() {
+  const mode = $('dupMatch').value;
+  const groups = {};
+  cards.forEach(c => { (groups[dupKey(c, mode)] ||= []).push(c); });
+  const dups = Object.values(groups).filter(g => g.length > 1);
+  const box = $('dupResults');
+  box.innerHTML = '';
+  if (!dups.length) { setDupStatus('No duplicates found. 🎉'); return; }
+  const total = dups.reduce((n, g) => n + g.length - 1, 0);
+  setDupStatus(`${dups.length} group${dups.length > 1 ? 's' : ''} with ${total} extra cop${total > 1 ? 'ies' : 'y'}.`);
+  dups.forEach(group => {
+    const div = document.createElement('div');
+    div.className = 'dupGroup';
+    const head = document.createElement('div');
+    head.className = 'dupHead';
+    head.innerHTML = `<span class="gt">${esc(group[0].name)} <span class="rs">${esc(group[0].game || '')}</span> ×${group.length}</span>`;
+    const mergeBtn = document.createElement('button');
+    mergeBtn.className = 'primary';
+    mergeBtn.textContent = 'Merge into 1';
+    mergeBtn.onclick = () => mergeGroup(group);
+    head.append(mergeBtn);
+    div.append(head);
+    group.forEach(c => {
+      const row = document.createElement('div');
+      row.className = 'dupRow';
+      row.innerHTML = `<img src="${c.image || 'icons/icon.svg'}" alt="">
+        <span class="dm">qty ${c.qty || 1}${c.location ? ' · ' + esc(c.location) : ''}</span>`;
+      const del = document.createElement('button');
+      del.className = 'danger';
+      del.textContent = 'Delete';
+      del.onclick = async () => { await dataDelete(c.id); await reload(); renderDuplicates(); };
+      row.append(del);
+      div.append(row);
+    });
+    box.append(div);
+  });
+}
+// Keep the first card, add up all quantities, delete the rest.
+async function mergeGroup(group) {
+  const keep = { ...group[0] };
+  keep.qty = group.reduce((n, c) => n + (parseInt(c.qty, 10) || 1), 0);
+  keep.updated = new Date().toISOString();
+  await dataPut(keep);
+  for (const c of group.slice(1)) await dataDelete(c.id);
+  await reload();
+  renderDuplicates();
+}
+
 // ---------- Wire up ----------
 async function init() {
   fillSelect($('f_game'), GAMES, false);
@@ -552,6 +610,9 @@ async function init() {
   $('deleteBtn').onclick = removeCard;
   $('cancelBtn').onclick = () => { stopCamera(); $('cardDialog').close(); };
   $('cardDialog').addEventListener('close', stopCamera);
+  $('dupBtn').onclick = () => { renderDuplicates(); $('dupDialog').showModal(); };
+  $('dupMatch').onchange = renderDuplicates;
+  $('dupCloseBtn').onclick = () => $('dupDialog').close();
   $('syncBtn').onclick = openSync;
   $('syncSaveBtn').onclick = () => { saveSyncCfg($('s_url').value.trim(), $('s_key').value.trim()); reload(); $('syncDialog').close(); };
   $('syncCloseBtn').onclick = () => $('syncDialog').close();
