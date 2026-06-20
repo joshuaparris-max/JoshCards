@@ -47,6 +47,11 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
 .cardStep{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:6px}
 .cardStep button{padding:2px 0;width:34px;font-size:16px;line-height:1}
 .cardStep .cct{font-weight:600;font-size:13px}
+.detailImg{width:100%;max-height:46vh;object-fit:contain;border-radius:10px;background:#000}
+.detailFields{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px;margin:8px 0}
+.detailFields dt{color:var(--muted)}
+.detailFields dd{margin:0}
+.detailFields .price{color:#4ad991;font-weight:600}
 .statTotals{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
 .statTotals .box{flex:1;min-width:90px;background:var(--bg);border:1px solid var(--line);
   border-radius:10px;padding:10px;text-align:center}

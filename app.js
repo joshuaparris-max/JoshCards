@@ -239,7 +239,7 @@ function render() {
   list.forEach(c => {
     const el = document.createElement('div');
     el.className = 'card';
-    el.onclick = () => openDialog(c);
+    el.onclick = () => openDetail(c);
     const img = c.image ? `<img src="${c.image}" alt="">` : `<img alt="" src="icons/icon.svg">`;
     el.innerHTML = `${img}<div class="body">
       <div class="name">${esc(c.name)}</div>
@@ -257,6 +257,23 @@ function render() {
   });
 }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m])); }
+
+// Card detail view (tap a card). Edit button drops into the editor.
+let detailCard = null;
+function openDetail(c) {
+  detailCard = c;
+  $('detailImg').src = c.image || 'icons/icon.svg';
+  $('detailName').textContent = c.name || '';
+  const rows = [
+    ['Game', c.game], ['Type / Colour', c.type], ['Cost', c.cost], ['Power / HP', c.power],
+    ['Rarity', c.rarity], ['Condition', c.meta?.condition], ['Quantity', c.qty || 1],
+    ['Location', c.location], ['Tags', (c.tags || []).join(', ')]
+  ].filter(r => r[1] !== '' && r[1] != null);
+  let html = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
+  if (c.price != null) html += `<dt>Value</dt><dd class="price">$${money(c.price * (c.qty || 1))}${c.qty > 1 ? ` ($${money(c.price)} ea)` : ''}</dd>`;
+  $('detailFields').innerHTML = html;
+  $('detailDialog').showModal();
+}
 
 // Quick quantity change from the grid (no dialog).
 async function adjustQty(card, delta) {
@@ -1289,6 +1306,8 @@ async function init() {
   $('filterGame').onchange = render;
   $('filterTag').onchange = render;
   $('sortBy').onchange = render;
+  $('detailCloseBtn').onclick = () => $('detailDialog').close();
+  $('detailEditBtn').onclick = () => { $('detailDialog').close(); openDialog(detailCard); };
   $('camBtn').onclick = startCamera;
   $('shotBtn').onclick = capture;
   $('fileInput').onchange = (e) => e.target.files[0] && fileToImage(e.target.files[0]);
