@@ -103,12 +103,42 @@
   </dialog>
 
   <footer>
+    <button id="decksBtn">Decks</button>
     <button id="statsBtn">Stats</button>
     <button id="dupBtn">Duplicates</button>
     <button id="syncBtn">Sync</button>
     <button id="exportBtn">Export JSON</button>
     <label class="fileBtn small">Import JSON<input id="importInput" type="file" accept="application/json" hidden /></label>
   </footer>
+
+  <dialog id="decksDialog">
+    <form method="dialog" id="decksForm">
+      <h2>Decks</h2>
+      <div class="capRow">
+        <button type="button" id="newPokeDeck">+ New Pokémon deck</button>
+        <button type="button" id="newMtgDeck">+ New MTG deck</button>
+      </div>
+      <div id="decksList" class="results"></div>
+      <div class="actions">
+        <button type="button" id="decksCloseBtn">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="deckEditor">
+    <form method="dialog" id="deckForm">
+      <span class="nameRow">
+        <input id="deck_name" type="text" placeholder="Deck name" />
+        <button type="button" id="deckDeleteBtn" class="danger">Delete</button>
+      </span>
+      <div id="deckLegality" class="legality"></div>
+      <input id="deckSearch" type="search" placeholder="Filter your cards…" />
+      <div id="deckCardList" class="results"></div>
+      <div class="actions">
+        <button type="button" id="deckCloseBtn">Done</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="statsDialog">
     <form method="dialog" id="statsForm">

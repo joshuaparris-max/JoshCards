@@ -81,6 +81,19 @@ button[disabled]{opacity:.5;cursor:default}
   border:2px solid transparent}
 .artGrid figure:hover img{border-color:var(--accent)}
 .artGrid figcaption{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.2}
+.legality{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0;font-size:13px}
+.legality .lhead{display:flex;justify-content:space-between;font-weight:700;font-size:15px;margin-bottom:6px}
+.legality .ok{color:#4ad991}
+.legality .bad{color:var(--danger)}
+.legality .chk{display:flex;gap:6px;padding:1px 0}
+.legality .brk{color:var(--muted);margin-top:6px}
+.deckRow{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--line)}
+.deckRow img{width:34px;height:46px;object-fit:cover;border-radius:5px;background:#000}
+.deckRow .dn{flex:1;font-size:13px;line-height:1.2}
+.deckRow .dn small{color:var(--muted)}
+.stepper{display:flex;align-items:center;gap:8px}
+.stepper button{width:30px;padding:6px 0;font-size:16px}
+.stepper .ct{min-width:18px;text-align:center;font-weight:600}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{font-size:12px;padding:5px 9px;border-radius:999px;border:1px solid var(--line);
   background:var(--bg);cursor:pointer;user-select:none}

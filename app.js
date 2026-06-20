@@ -18,10 +18,15 @@ const TAGS = [
 let db;
 function openDB() {
   return new Promise((res, rej) => {
-    const r = indexedDB.open('joshcards', 1);
-    r.onupgradeneeded = () => {
-      const s = r.result.createObjectStore('cards', { keyPath: 'id' });
-      s.createIndex('game', 'game', { unique: false });
+    const r = indexedDB.open('joshcards', 2);
+    r.onupgradeneeded = (e) => {
+      const d = r.result;
+      if (!d.objectStoreNames.contains('cards')) {
+        d.createObjectStore('cards', { keyPath: 'id' }).createIndex('game', 'game', { unique: false });
+      }
+      if (!d.objectStoreNames.contains('decks')) {
+        d.createObjectStore('decks', { keyPath: 'id' });
+      }
     };
     r.onsuccess = () => { db = r.result; res(); };
     r.onerror = () => rej(r.error);
@@ -31,6 +36,10 @@ function tx(mode) { return db.transaction('cards', mode).objectStore('cards'); }
 function putCard(c) { return new Promise((res, rej) => { const r = tx('readwrite').put(c); r.onsuccess = res; r.onerror = () => rej(r.error); }); }
 function delCard(id) { return new Promise((res, rej) => { const r = tx('readwrite').delete(id); r.onsuccess = res; r.onerror = () => rej(r.error); }); }
 function allCards() { return new Promise((res, rej) => { const r = tx('readonly').getAll(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+function dtx(mode) { return db.transaction('decks', mode).objectStore('decks'); }
+function putDeckLocal(d) { return new Promise((res, rej) => { const r = dtx('readwrite').put(d); r.onsuccess = res; r.onerror = () => rej(r.error); }); }
+function delDeckLocal(id) { return new Promise((res, rej) => { const r = dtx('readwrite').delete(id); r.onsuccess = res; r.onerror = () => rej(r.error); }); }
+function allDecksLocal() { return new Promise((res, rej) => { const r = dtx('readonly').getAll(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
 
 // ---------- Online sync (Supabase REST) ----------
 function syncCfg() {
@@ -119,8 +128,70 @@ function addTombstone(id) {
   if (!t.includes(id)) { t.push(id); localStorage.setItem('joshcards_deleted', JSON.stringify(t)); }
 }
 
+// Resolve a card's deck category/flags — uses stored meta, else infers from fields
+// so cards added before deck-building still categorise reasonably.
+function cardMeta(c) {
+  if (c.meta && c.meta.cat) return c.meta;
+  const game = c.game || '';
+  if (/magic/i.test(game)) {
+    const t = (c.type || '').toLowerCase();
+    const land = t.includes('land');
+    return { cat: land ? 'land' : 'spell', noLimit: land && t.includes('basic'), basicPokemon: false, aceSpec: false };
+  }
+  // Pokémon heuristics
+  if (/^hp/i.test(c.power || '')) return { cat: 'pokemon', noLimit: false, basicPokemon: true, aceSpec: false };
+  if (/energy/i.test(c.name || '')) {
+    const basic = /^(grass|fire|water|lightning|psychic|fighting|darkness|metal|fairy|dragon|colorless)?\s*energy$/i.test((c.name || '').trim());
+    return { cat: 'energy', noLimit: basic, basicPokemon: false, aceSpec: false };
+  }
+  return { cat: 'trainer', noLimit: false, basicPokemon: false, aceSpec: false };
+}
+
+// ---------- Deck storage (local + Supabase 'decks' table) ----------
+async function remoteGetDecks(cfg) {
+  const r = await fetch(cfg.url + '/rest/v1/decks?select=*', { headers: sbHeaders(cfg) });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+async function remoteUpsertDeck(cfg, deck) {
+  const r = await fetch(cfg.url + '/rest/v1/decks', {
+    method: 'POST', headers: { ...sbHeaders(cfg), Prefer: 'resolution=merge-duplicates' },
+    body: JSON.stringify(deck)
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+}
+async function remoteDeleteDeck(cfg, id) {
+  const r = await fetch(cfg.url + '/rest/v1/decks?id=eq.' + encodeURIComponent(id), {
+    method: 'DELETE', headers: sbHeaders(cfg)
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+}
+async function dataPutDeck(d) {
+  await putDeckLocal(d);
+  const cfg = syncCfg();
+  if (cfg) { try { await remoteUpsertDeck(cfg, d); } catch (e) { console.warn('deck sync', e.message); } }
+}
+async function dataDeleteDeck(id) {
+  await delDeckLocal(id);
+  const cfg = syncCfg();
+  if (cfg) { try { await remoteDeleteDeck(cfg, id); } catch (e) { console.warn('deck sync', e.message); } }
+}
+async function loadDecks() {
+  const cfg = syncCfg();
+  if (cfg) {
+    try {
+      const remote = await remoteGetDecks(cfg);
+      const ids = new Set(remote.map(d => d.id));
+      for (const d of remote) await putDeckLocal(d);
+      for (const d of await allDecksLocal()) if (!ids.has(d.id)) await remoteUpsertDeck(cfg, d);
+    } catch (e) { console.warn('deck load', e.message); }
+  }
+  decks = (await allDecksLocal()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+}
+
 // ---------- State / elements ----------
 let cards = [];
+let decks = [];
 let editingId = null;
 let stream = null;
 const $ = (id) => document.getElementById(id);
@@ -177,6 +248,7 @@ function openDialog(card) {
   $('f_loc').value = card?.location || '';
   $('f_tags').value = (card?.tags || []).join(', ');
   currentImage = card?.image || null;
+  currentMeta = card?.meta ? { ...card.meta } : {};
   showPreview(currentImage);
   renderChips(card?.tags || []);
   setStatus('');
@@ -185,6 +257,7 @@ function openDialog(card) {
 }
 
 let currentImage = null;
+let currentMeta = {};
 function renderChips(active) {
   const wrap = $('tagChips');
   wrap.innerHTML = '';
@@ -341,12 +414,15 @@ function applyHit(h) {
   if (h.rarity) $('f_rarity').value = h.rarity;
   if (h.price != null) $('f_price').value = h.price;
   if (h.image) { currentImage = h.image; showPreview(currentImage); }
+  // carry deck-legality metadata that has no visible form field
+  currentMeta = { cat: h.cat, noLimit: !!h.noLimit, basicPokemon: !!h.basicPokemon, aceSpec: !!h.aceSpec };
 }
 
 // --- Mappers: raw API card -> our hit shape (image = official art) ---
 function mapMTG(c) {
   const colours = (c.colors && c.colors.length) ? c.colors.join('') : 'Colourless';
   const uris = c.image_uris || c.card_faces?.[0]?.image_uris || {};
+  const tl = (c.type_line || '').toLowerCase();
   return {
     source: 'Scryfall',
     name: c.name,
@@ -357,7 +433,11 @@ function mapMTG(c) {
     price: c.prices ? parseFloat(c.prices.usd || c.prices.usd_foil) || null : null,
     image: uris.normal || null,
     thumb: uris.small || uris.normal || null,
-    sub: [c.set_name, c.rarity].filter(Boolean).join(' · ')
+    sub: [c.set_name, c.rarity].filter(Boolean).join(' · '),
+    cat: tl.includes('land') ? 'land' : 'spell',
+    noLimit: tl.includes('basic') && tl.includes('land'),
+    basicPokemon: false,
+    aceSpec: false
   };
 }
 // Best available price for a Pokémon card: TCGPlayer (USD) market→mid→low,
@@ -377,6 +457,9 @@ function pokePrice(c) {
 }
 function mapPokemon(c) {
   const cost = c.attacks && c.attacks[0] && c.attacks[0].cost ? c.attacks[0].cost.join(' ') : '';
+  const sup = c.supertype || '';
+  const subs = c.subtypes || [];
+  const cat = /pok/i.test(sup) ? 'pokemon' : /energy/i.test(sup) ? 'energy' : 'trainer';
   return {
     source: 'Pokémon TCG',
     name: c.name,
@@ -387,7 +470,11 @@ function mapPokemon(c) {
     price: pokePrice(c),
     image: c.images ? c.images.large : null,
     thumb: c.images ? c.images.small : null,
-    sub: [c.set?.name, c.rarity].filter(Boolean).join(' · ')
+    sub: [c.set?.name, c.rarity].filter(Boolean).join(' · '),
+    cat,
+    noLimit: cat === 'energy' && subs.includes('Basic'),
+    basicPokemon: cat === 'pokemon' && subs.includes('Basic'),
+    aceSpec: subs.includes('ACE SPEC') || /ace spec/i.test(c.rarity || '')
   };
 }
 
@@ -542,6 +629,8 @@ async function save(next) {
     location: $('f_loc').value.trim(),
     tags: parseTags($('f_tags').value),
     image: currentImage || null,
+    meta: { cat: currentMeta.cat || null, noLimit: !!currentMeta.noLimit,
+            basicPokemon: !!currentMeta.basicPokemon, aceSpec: !!currentMeta.aceSpec },
     updated: new Date().toISOString()
   };
   try {
@@ -618,6 +707,134 @@ async function importJSON(file) {
   alert('Imported ' + arr.length + ' cards.');
 }
 
+// ---------- Deck building ----------
+let editingDeck = null;
+
+async function openDecks() {
+  await loadDecks();
+  renderDeckList();
+  $('decksDialog').showModal();
+}
+function renderDeckList() {
+  const box = $('decksList');
+  box.innerHTML = '';
+  if (!decks.length) { box.innerHTML = '<p class="hint">No decks yet. Create one above.</p>'; return; }
+  decks.forEach(d => {
+    const leg = legality(d);
+    const row = document.createElement('div');
+    row.className = 'result';
+    row.innerHTML = `<div style="flex:1">
+        <div class="rn">${esc(d.name || 'Untitled')}</div>
+        <div class="rs">${esc(deckGameShort(d.game))} · ${leg.total}/${leg.target} cards ·
+          <span class="${leg.legal ? 'ok' : 'bad'}">${leg.legal ? 'Legal ✓' : 'Not legal'}</span></div>
+      </div>`;
+    row.onclick = () => openDeckEditor(d);
+    box.append(row);
+  });
+}
+function deckGameShort(g) { return /magic/i.test(g) ? 'MTG' : 'Pokémon'; }
+
+function newDeck(game) {
+  const d = { id: 'deck_' + Date.now().toString(36), name: game === 'mtg' ? 'New MTG deck' : 'New Pokémon deck',
+    game: game === 'mtg' ? 'Magic: The Gathering' : 'Pokémon', entries: {}, updated: new Date().toISOString() };
+  openDeckEditor(d, true);
+}
+function openDeckEditor(deck, isNew) {
+  editingDeck = { ...deck, entries: { ...(deck.entries || {}) } };
+  $('deck_name').value = editingDeck.name || '';
+  $('deckSearch').value = '';
+  $('decksDialog').close();
+  renderDeckEditor();
+  $('deckEditor').showModal();
+  if (isNew) dataPutDeck(editingDeck); // persist immediately so it shows in the list
+}
+function deckCards() {
+  // catalogue cards for this deck's game, newest matches first by name
+  return cards.filter(c => deckGameShort(c.game) === deckGameShort(editingDeck.game))
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+}
+function renderDeckEditor() {
+  renderLegality();
+  const q = $('deckSearch').value.trim().toLowerCase();
+  const list = $('deckCardList');
+  list.innerHTML = '';
+  const pool = deckCards().filter(c => !q || (c.name || '').toLowerCase().includes(q));
+  if (!pool.length) { list.innerHTML = '<p class="hint">No ' + deckGameShort(editingDeck.game) + ' cards in your catalogue yet — add some first.</p>'; return; }
+  pool.forEach(c => {
+    const count = editingDeck.entries[c.id] || 0;
+    const m = cardMeta(c);
+    const row = document.createElement('div');
+    row.className = 'deckRow';
+    row.innerHTML = `<img src="${c.image || 'icons/icon.svg'}" alt="">
+      <div class="dn">${esc(c.name)}<br><small>${esc(m.cat)}${c.qty ? ' · own ' + c.qty : ''}</small></div>`;
+    const step = document.createElement('div');
+    step.className = 'stepper';
+    const minus = document.createElement('button'); minus.type = 'button'; minus.textContent = '−';
+    const ct = document.createElement('span'); ct.className = 'ct'; ct.textContent = count;
+    const plus = document.createElement('button'); plus.type = 'button'; plus.textContent = '+';
+    minus.onclick = () => changeCount(c.id, -1);
+    plus.onclick = () => changeCount(c.id, +1);
+    step.append(minus, ct, plus);
+    row.append(step);
+    list.append(row);
+  });
+}
+function changeCount(cardId, delta) {
+  const cur = editingDeck.entries[cardId] || 0;
+  const next = Math.max(0, cur + delta);
+  if (next === 0) delete editingDeck.entries[cardId]; else editingDeck.entries[cardId] = next;
+  editingDeck.updated = new Date().toISOString();
+  renderDeckEditor();
+  dataPutDeck(editingDeck);
+}
+
+// The legality engine.
+function legality(deck) {
+  const isMtg = /magic/i.test(deck.game);
+  const target = 60;
+  const entries = deck.entries || {};
+  const byId = Object.fromEntries(cards.map(c => [c.id, c]));
+  let total = 0, aceSpec = 0, hasBasicPokemon = false;
+  const byCat = {};
+  const byName = {};        // for the max-4 rule (counts copies across printings of a name)
+  const nameNoLimit = {};
+  for (const [id, n] of Object.entries(entries)) {
+    const c = byId[id]; if (!c) continue;
+    const m = cardMeta(c);
+    total += n;
+    byCat[m.cat] = (byCat[m.cat] || 0) + n;
+    if (m.basicPokemon) hasBasicPokemon = true;
+    if (m.aceSpec) aceSpec += n;
+    const key = (c.name || '').toLowerCase();
+    byName[key] = (byName[key] || 0) + n;
+    if (m.noLimit) nameNoLimit[key] = true;
+  }
+  const overFour = Object.entries(byName).filter(([k, n]) => n > 4 && !nameNoLimit[k]).map(([k]) => k);
+  const checks = [];
+  checks.push({ label: `Exactly 60 cards (have ${total})`, ok: total === target });
+  checks.push({ label: overFour.length ? `Max 4 copies — too many: ${overFour.join(', ')}` : 'Max 4 copies of any card', ok: overFour.length === 0 });
+  if (isMtg) {
+    // (lands aren't strictly required, but a deck with 0 land can't function — flag as a warning-style check)
+    checks.push({ label: `Has lands (${byCat.land || 0})`, ok: (byCat.land || 0) > 0 });
+  } else {
+    checks.push({ label: 'At least one Basic Pokémon', ok: hasBasicPokemon });
+    checks.push({ label: `Max 1 ACE SPEC (have ${aceSpec})`, ok: aceSpec <= 1 });
+  }
+  const legal = checks.every(c => c.ok);
+  return { isMtg, target, total, byCat, checks, legal };
+}
+function renderLegality() {
+  const leg = legality(editingDeck);
+  const brk = leg.isMtg
+    ? `Lands ${leg.byCat.land || 0} · Spells ${leg.byCat.spell || 0}`
+    : `Pokémon ${leg.byCat.pokemon || 0} · Trainer ${leg.byCat.trainer || 0} · Energy ${leg.byCat.energy || 0}`;
+  $('deckLegality').innerHTML =
+    `<div class="lhead"><span>${leg.total}/${leg.target}</span>
+       <span class="${leg.legal ? 'ok' : 'bad'}">${leg.legal ? 'LEGAL ✓' : 'Not legal yet'}</span></div>` +
+    leg.checks.map(c => `<div class="chk ${c.ok ? 'ok' : 'bad'}">${c.ok ? '✓' : '✗'} <span>${esc(c.label)}</span></div>`).join('') +
+    `<div class="brk">${brk}</div>`;
+}
+
 // ---------- Collection dashboard ----------
 function showStats() { renderStats(); $('statsDialog').showModal(); }
 function renderStats() {
@@ -659,9 +876,10 @@ async function refreshPrices() {
     setStatsStatus(`Pricing ${++done}/${targets.length}… ${esc(c.name)}`, false, true);
     try {
       const hit = /magic/i.test(c.game) ? await lookupMTG(c.name) : await lookupPokemon(c.name);
-      if (hit && hit.price != null) {
-        await dataPut({ ...c, price: hit.price, updated: new Date().toISOString() });
-        updated++;
+      if (hit) {
+        const meta = { cat: hit.cat, noLimit: !!hit.noLimit, basicPokemon: !!hit.basicPokemon, aceSpec: !!hit.aceSpec };
+        await dataPut({ ...c, price: hit.price != null ? hit.price : c.price, meta, updated: new Date().toISOString() });
+        if (hit.price != null) updated++;
       }
     } catch { /* skip this card, keep going */ }
     await new Promise(r => setTimeout(r, 120)); // be gentle on the free APIs
@@ -787,6 +1005,16 @@ async function init() {
   $('saveNextBtn').onclick = () => save(true);
   $('statsBtn').onclick = showStats;
   $('statsCloseBtn').onclick = () => $('statsDialog').close();
+  $('decksBtn').onclick = openDecks;
+  $('decksCloseBtn').onclick = () => $('decksDialog').close();
+  $('newPokeDeck').onclick = () => newDeck('poke');
+  $('newMtgDeck').onclick = () => newDeck('mtg');
+  $('deckSearch').oninput = renderDeckEditor;
+  $('deck_name').oninput = () => { if (editingDeck) { editingDeck.name = $('deck_name').value; dataPutDeck(editingDeck); } };
+  $('deckCloseBtn').onclick = () => { $('deckEditor').close(); openDecks(); };
+  $('deckDeleteBtn').onclick = async () => {
+    if (editingDeck && confirm('Delete this deck?')) { await dataDeleteDeck(editingDeck.id); $('deckEditor').close(); openDecks(); }
+  };
   $('refreshPricesBtn').onclick = refreshPrices;
   $('deleteBtn').onclick = removeCard;
   $('cancelBtn').onclick = () => { stopCamera(); $('cardDialog').close(); };
