@@ -152,7 +152,10 @@
         <button type="button" id="deckDeleteBtn" class="danger">Delete</button>
       </span>
       <div id="deckLegality" class="legality"></div>
-      <button type="button" id="playtestBtn" class="primary">Playtest / export</button>
+      <div class="capRow">
+        <button type="button" id="playtestBtn" class="primary">Playtest / export</button>
+        <button type="button" id="sampleHandBtn">Sample hand</button>
+      </div>
       <input id="deckSearch" type="search" placeholder="Filter your cards…" />
       <div id="deckCardList" class="results"></div>
       <div class="actions">
@@ -175,6 +178,18 @@
         <button type="button" id="copyDeckBtn">Copy list</button>
         <button type="button" id="downloadDeckBtn">Download</button>
         <button type="button" id="playtestCloseBtn">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="handDialog">
+    <form method="dialog" id="handForm">
+      <h2>Opening hand</h2>
+      <div id="handSummary" class="hint"></div>
+      <div id="handGrid" class="artGrid"></div>
+      <div class="actions">
+        <button type="button" id="drawAgainBtn" class="primary">Draw again</button>
+        <button type="button" id="handCloseBtn">Close</button>
       </div>
     </form>
   </dialog>

@@ -1000,6 +1000,44 @@ function downloadDeckExport() {
   URL.revokeObjectURL(a.href);
 }
 
+// Goldfish: draw a random opening hand from the current deck.
+function drawHand() {
+  const byId = Object.fromEntries(cards.map(c => [c.id, c]));
+  const pile = [];
+  for (const [id, n] of Object.entries(editingDeck.entries || {})) {
+    const c = byId[id]; if (!c) continue;
+    for (let i = 0; i < n; i++) pile.push(c);
+  }
+  // Fisher–Yates shuffle
+  for (let i = pile.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pile[i], pile[j]] = [pile[j], pile[i]];
+  }
+  const hand = pile.slice(0, 7);
+  const isMtg = /magic/i.test(editingDeck.game);
+  let note = `${pile.length} cards in deck.`;
+  if (!isMtg) {
+    const hasBasic = hand.some(c => cardMeta(c).basicPokemon);
+    note += hasBasic ? ' Hand has a Basic Pokémon ✓ (playable).' : ' ⚠ No Basic Pokémon — you would mulligan this hand.';
+  } else {
+    const lands = hand.filter(c => cardMeta(c).cat === 'land').length;
+    note += ` ${lands} land${lands === 1 ? '' : 's'} in hand.`;
+  }
+  $('handSummary').textContent = note;
+  const grid = $('handGrid');
+  grid.innerHTML = '';
+  if (!hand.length) { grid.innerHTML = '<p class="hint">Add cards to the deck first.</p>'; return; }
+  hand.forEach(c => {
+    const fig = document.createElement('figure');
+    fig.innerHTML = `<img src="${c.image || 'icons/icon.svg'}" alt=""><figcaption>${esc(c.name)}</figcaption>`;
+    grid.append(fig);
+  });
+}
+function openSampleHand() {
+  drawHand();
+  if (!$('handDialog').open) $('handDialog').showModal();
+}
+
 // The legality engine.
 function legality(deck) {
   const isMtg = /magic/i.test(deck.game);
@@ -1246,6 +1284,9 @@ async function init() {
   $('deckSearch').oninput = renderDeckEditor;
   $('deck_name').oninput = () => { if (editingDeck) { editingDeck.name = $('deck_name').value; dataPutDeck(editingDeck); } };
   $('playtestBtn').onclick = openPlaytest;
+  $('sampleHandBtn').onclick = openSampleHand;
+  $('drawAgainBtn').onclick = drawHand;
+  $('handCloseBtn').onclick = () => $('handDialog').close();
   $('playtestFormat').onchange = renderPlaytestExport;
   $('copyDeckBtn').onclick = copyDeckExport;
   $('downloadDeckBtn').onclick = downloadDeckExport;
