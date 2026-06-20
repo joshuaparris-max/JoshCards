@@ -390,14 +390,24 @@ async function lookup() {
   const ctrl = new AbortController();
   const cancel = () => ctrl.abort();
   try {
-    let hit = null;
-    if (/magic/i.test(game)) { setStatus('Searching Scryfall…', false, true, cancel); hit = await lookupMTG(name, ctrl.signal); }
-    else if (/pok/i.test(game)) { setStatus('Searching Pokémon TCG…', false, true, cancel); hit = await lookupPokemon(name, ctrl.signal); }
+    let candidates = [];
+    if (/magic/i.test(game)) { setStatus('Searching Scryfall…', false, true, cancel); candidates = await searchMTG(name, ctrl.signal); }
+    else if (/pok/i.test(game)) { setStatus('Searching Pokémon TCG…', false, true, cancel); candidates = await searchPokemon(name, ctrl.signal); }
     else { setStatus('No card database for this game — keeping your photo & name.'); return; }
 
-    if (!hit) { setStatus('No match found — check the name and Look up again.', true); return; }
-    applyHit(hit);
-    setStatus('Filled from ' + hit.source + ' ✓');
+    if (!candidates.length) { setStatus('No match found — check the name and Look up again.', true); return; }
+
+    // One card per distinct name, so you choose Virizion vs Virizion ex (not every printing).
+    const seen = new Set();
+    const distinct = candidates.filter(h => { const k = (h.name || '').toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+
+    if (distinct.length === 1) {
+      applyHit(distinct[0]);
+      setStatus('Filled from ' + distinct[0].source + ' ✓');
+    } else {
+      setStatus(distinct.length + ' matches — pick the right card.');
+      showChooser(distinct, 'Which card?', h => h.name, h => { applyHit(h); setStatus('Filled: ' + h.name + ' ✓'); });
+    }
   } catch (e) {
     if (e.name === 'AbortError') setStatus('Search cancelled.');
     else setStatus('Lookup failed (offline?). Fields stay editable.', true);
@@ -538,6 +548,21 @@ function setArtStatus(msg, isErr, loading) {
   s.classList.toggle('err', !!isErr);
 }
 
+// Shared picker grid (used by Look up's candidate chooser and the art picker).
+function showChooser(list, title, captionFn, onPick) {
+  $('artTitle').textContent = title;
+  const grid = $('artResults');
+  grid.innerHTML = '';
+  list.forEach(h => {
+    const fig = document.createElement('figure');
+    fig.innerHTML = `<img src="${h.thumb || h.image}" alt="">
+      <figcaption>${esc(captionFn(h))}</figcaption>`;
+    fig.onclick = () => { onPick(h); $('artDialog').close(); };
+    grid.append(fig);
+  });
+  if (!$('artDialog').open) $('artDialog').showModal();
+}
+
 async function openArtPicker() {
   const game = $('f_game').value;
   const name = $('f_name').value.trim();
@@ -546,23 +571,13 @@ async function openArtPicker() {
   if (!isMagic && !isPoke) { setStatus('Art picker only works for Magic & Pokémon.', true); return; }
   $('artResults').innerHTML = '';
   setArtStatus('Loading printings…', false, true);
+  $('artTitle').textContent = 'Choose art / printing';
   $('artDialog').showModal();
   try {
     const prints = isMagic ? await printsMTG(name) : await printsPokemon(name);
     if (!prints.length) { setArtStatus('No printings found for “' + name + '”.', true); return; }
     setArtStatus(prints.length + ' printing' + (prints.length > 1 ? 's' : '') + ' — tap one.');
-    const grid = $('artResults');
-    prints.forEach(h => {
-      const fig = document.createElement('figure');
-      fig.innerHTML = `<img src="${h.thumb || h.image}" alt="">
-        <figcaption>${esc(h.sub || '')}</figcaption>`;
-      fig.onclick = () => {
-        applyHit(h);
-        setStatus('Art set from ' + h.source + ' ✓');
-        $('artDialog').close();
-      };
-      grid.append(fig);
-    });
+    showChooser(prints, 'Choose art / printing', h => h.sub || '', h => { applyHit(h); setStatus('Art set from ' + h.source + ' ✓'); });
   } catch (e) {
     setArtStatus('Failed to load printings (offline?).', true);
   }
