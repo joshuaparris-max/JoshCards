@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "PowerShell(Get-ChildItem -Force C:\\\\dev\\\\CardGameTracker | Select-Object Name, Length; Write-Output \"---GIT---\"; if \\(Test-Path C:\\\\dev\\\\CardGameTracker\\\\.git\\) { \"git exists\" } else { \"no git\" }; Write-Output \"---TOOLS---\"; \\(Get-Command git\\).Source; \\(Get-Command node -ErrorAction SilentlyContinue\\).Source; \\(Get-Command gh -ErrorAction SilentlyContinue\\).Source)"
-    ]
-  }
-}
