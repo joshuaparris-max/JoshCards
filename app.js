@@ -825,6 +825,7 @@ async function reload() {
   cards = (await allCards()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   populateRarityFilter();
   render();
+  checkBackupReminder();
   $('syncBtn').textContent = cfg ? 'Synced' : 'Sync';
 }
 
@@ -835,6 +836,22 @@ function exportJSON() {
   a.href = URL.createObjectURL(blob);
   a.download = 'joshcards-backup.json';
   a.click();
+  localStorage.setItem('joshcards_last_backup', String(Date.now()));
+  $('backupBanner').hidden = true;
+}
+// Nudge to back up if it's been over two weeks (and there's data to lose).
+function checkBackupReminder() {
+  if (!cards.length) { $('backupBanner').hidden = true; return; }
+  const last = parseInt(localStorage.getItem('joshcards_last_backup') || '0', 10);
+  const snooze = parseInt(localStorage.getItem('joshcards_backup_snooze') || '0', 10);
+  const now = Date.now(), TWO_WEEKS = 14 * 864e5, THREE_DAYS = 3 * 864e5;
+  if (now - snooze < THREE_DAYS) return;
+  if (now - last > TWO_WEEKS) {
+    $('backupMsg').textContent = last
+      ? "It's been over two weeks since your last backup."
+      : "You haven't backed up your collection yet.";
+    $('backupBanner').hidden = false;
+  }
 }
 async function importJSON(file) {
   const text = await file.text();
@@ -1355,6 +1372,8 @@ async function init() {
   applyTheme(localStorage.getItem('joshcards_theme') || 'dark');
   $('themeBtn').onclick = () => applyTheme(document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
   $('randomBtn').onclick = randomGame;
+  $('backupNowBtn').onclick = exportJSON;
+  $('backupDismiss').onclick = () => { $('backupBanner').hidden = true; localStorage.setItem('joshcards_backup_snooze', String(Date.now())); };
   $('detailCloseBtn').onclick = () => $('detailDialog').close();
   $('detailEditBtn').onclick = () => { $('detailDialog').close(); openDialog(detailCard); };
   $('camBtn').onclick = startCamera;
