@@ -70,16 +70,44 @@ async function remoteDelete(cfg, id) {
 }
 
 // Data layer: local IndexedDB is always the cache; remote is the shared truth.
+// If a remote write fails (offline), queue it and retry on next load / reconnect.
 async function dataPut(card) {
   await putCard(card);
   const cfg = syncCfg();
-  if (cfg) await remoteUpsert(cfg, card);
+  if (!cfg) return;
+  try { await remoteUpsert(cfg, card); }
+  catch { enqueue({ op: 'upsert', id: card.id, card }); }
 }
 async function dataDelete(id) {
   await delCard(id);
   addTombstone(id);
   const cfg = syncCfg();
-  if (cfg) await remoteDelete(cfg, id);
+  if (!cfg) return;
+  try { await remoteDelete(cfg, id); }
+  catch { enqueue({ op: 'delete', id }); }
+}
+
+// --- Pending-op queue (survives reloads via localStorage) ---
+function pendingOps() {
+  try { return JSON.parse(localStorage.getItem('joshcards_pending') || '[]'); } catch { return []; }
+}
+function setPending(q) { localStorage.setItem('joshcards_pending', JSON.stringify(q)); }
+function enqueue(op) {
+  const q = pendingOps().filter(o => o.id !== op.id); // latest op per card wins
+  q.push(op);
+  setPending(q);
+}
+async function flushQueue(cfg) {
+  let q = pendingOps();
+  if (!q.length) return;
+  const remaining = [];
+  for (const op of q) {
+    try {
+      if (op.op === 'delete') await remoteDelete(cfg, op.id);
+      else await remoteUpsert(cfg, op.card);
+    } catch { remaining.push(op); } // still offline — keep for next time
+  }
+  setPending(remaining);
 }
 
 // Track deletions so a stale local copy on another device doesn't resurrect them.
@@ -433,6 +461,7 @@ async function reload() {
   const cfg = syncCfg();
   if (cfg) {
     try {
+      await flushQueue(cfg); // push any offline edits/deletes first
       const remote = await remoteGetAll(cfg);
       const remoteIds = new Set(remote.map(c => c.id));
       const dead = new Set(tombstones());
@@ -529,6 +558,9 @@ async function init() {
   $('syncTestBtn').onclick = testSync;
   $('exportBtn').onclick = exportJSON;
   $('importInput').onchange = (e) => e.target.files[0] && importJSON(e.target.files[0]);
+
+  // When the connection comes back, flush queued changes and refresh.
+  window.addEventListener('online', () => reload());
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 }
