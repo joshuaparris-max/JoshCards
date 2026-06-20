@@ -34,10 +34,13 @@ function allCards() { return new Promise((res, rej) => { const r = tx('readonly'
 
 // ---------- Online sync (Supabase REST) ----------
 function syncCfg() {
+  // In-app Sync dialog overrides; otherwise fall back to the built-in default (config.js).
   try {
     const c = JSON.parse(localStorage.getItem('joshcards_sync') || 'null');
-    return (c && c.url && c.key) ? c : null;
-  } catch { return null; }
+    if (c && c.url && c.key) return c;
+  } catch { /* ignore */ }
+  const d = window.JOSHCARDS_SYNC;
+  return (d && d.url && d.key) ? d : null;
 }
 function saveSyncCfg(url, key) {
   if (url && key) localStorage.setItem('joshcards_sync', JSON.stringify({ url: url.replace(/\/+$/, ''), key }));

@@ -1,6 +1,6 @@
 // Minimal offline cache so the app opens without a connection.
-const CACHE = 'joshcards-v4';
-const ASSETS = ['.', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest', 'icons/icon.svg'];
+const CACHE = 'joshcards-v5';
+const ASSETS = ['.', 'index.html', 'styles.css', 'app.js', 'config.js', 'manifest.webmanifest', 'icons/icon.svg'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
 });
