@@ -1220,6 +1220,25 @@ function renderStats() {
   });
   html += `<tr class="tot"><td>Total</td><td class="num">${cards.length}</td><td class="num">${totalCards}</td><td class="num">$${money(totalValue)}</td></tr>`;
   $('statsTable').innerHTML = html;
+  renderValueTrend(totalValue);
+}
+
+// Record one value snapshot per day and show the change over time.
+function renderValueTrend(totalValue) {
+  let hist = [];
+  try { hist = JSON.parse(localStorage.getItem('joshcards_value_hist') || '[]'); } catch { hist = []; }
+  const today = new Date().toISOString().slice(0, 10);
+  hist = hist.filter(h => h.d !== today);
+  hist.push({ d: today, v: Math.round(totalValue * 100) / 100 });
+  hist = hist.slice(-90);
+  localStorage.setItem('joshcards_value_hist', JSON.stringify(hist));
+  const el = $('valueTrend'); if (!el) return;
+  if (hist.length < 2) { el.textContent = 'Tracking value from today — check back to see the trend.'; return; }
+  const first = hist[0], prev = hist[hist.length - 2];
+  const dChange = totalValue - prev.v, totalChange = totalValue - first.v;
+  const arrow = (n) => n > 0 ? '▲' : n < 0 ? '▼' : '–';
+  el.innerHTML = `Since last visit: <span class="${dChange >= 0 ? 'ok' : 'bad'}">${arrow(dChange)} $${money(Math.abs(dChange))}</span>` +
+    ` · Since ${first.d}: <span class="${totalChange >= 0 ? 'ok' : 'bad'}">${arrow(totalChange)} $${money(Math.abs(totalChange))}</span>`;
 }
 
 function setStatsStatus(msg, isErr, loading) {
