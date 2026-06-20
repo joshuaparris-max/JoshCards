@@ -214,11 +214,13 @@ function render() {
   const fg = $('filterGame').value;
   const ft = $('filterTag').value;
   const fo = $('filterOwn') ? $('filterOwn').value : '';
+  const fr = $('filterRarity') ? $('filterRarity').value : '';
   const list = cards.filter(c => {
     if (fg && c.game !== fg) return false;
     if (ft && !(c.tags || []).includes(ft)) return false;
     if (fo === 'owned' && c.meta?.wishlist) return false;
     if (fo === 'wish' && !c.meta?.wishlist) return false;
+    if (fr && (c.rarity || '') !== fr) return false;
     if (!q) return true;
     const hay = [c.name, c.type, c.cost, c.power, c.rarity, c.location, (c.tags || []).join(' '),
       c.meta?.setCode, c.meta?.number, c.meta?.condition].join(' ').toLowerCase();
@@ -269,6 +271,16 @@ function render() {
   });
 }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m])); }
+
+// Keep the rarity filter's options in sync with what's actually in the collection.
+function populateRarityFilter() {
+  const sel = $('filterRarity'); if (!sel) return;
+  const cur = sel.value;
+  const rarities = [...new Set(cards.map(c => c.rarity).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">All rarities</option>';
+  rarities.forEach(r => sel.append(new Option(r, r)));
+  sel.value = rarities.includes(cur) ? cur : '';
+}
 
 // "What should we play?" — pick a random game you actually own cards for.
 function randomGame() {
@@ -811,6 +823,7 @@ async function reload() {
     }
   }
   cards = (await allCards()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  populateRarityFilter();
   render();
   $('syncBtn').textContent = cfg ? 'Synced' : 'Sync';
 }
@@ -1337,6 +1350,7 @@ async function init() {
   $('filterGame').onchange = render;
   $('filterTag').onchange = render;
   $('filterOwn').onchange = render;
+  $('filterRarity').onchange = render;
   $('sortBy').onchange = render;
   applyTheme(localStorage.getItem('joshcards_theme') || 'dark');
   $('themeBtn').onclick = () => applyTheme(document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
