@@ -243,7 +243,7 @@ function render() {
     const img = c.image ? `<img src="${c.image}" alt="">` : `<img alt="" src="icons/icon.svg">`;
     el.innerHTML = `${img}<div class="body">
       <div class="name">${esc(c.name)}</div>
-      <div class="meta">${esc(c.game || '')}${c.location ? ' · ' + esc(c.location) : ''}</div>
+      <div class="meta">${esc(c.game || '')}${c.location ? ' · ' + esc(c.location) : ''}${c.meta?.condition ? ' · ' + esc(c.meta.condition) : ''}</div>
       ${c.price != null ? `<div class="price">$${money(c.price * (c.qty || 1))}${c.qty > 1 ? ` ($${money(c.price)} ea)` : ''}</div>` : ''}
     </div>`;
     const step = document.createElement('div');
@@ -278,6 +278,7 @@ function openDialog(card) {
   $('f_rarity').value = card?.rarity || '';
   $('f_price').value = card?.price != null ? card.price : '';
   $('f_qty').value = card?.qty || 1;
+  $('f_condition').value = card?.meta?.condition || '';
   $('f_loc').value = card?.location || '';
   $('f_tags').value = (card?.tags || []).join(', ');
   currentImage = card?.image || null;
@@ -704,7 +705,8 @@ async function save(next) {
       basicPokemon: !!currentMeta.basicPokemon,
       aceSpec: !!currentMeta.aceSpec,
       setCode: currentMeta.setCode || '',
-      number: currentMeta.number || ''
+      number: currentMeta.number || '',
+      condition: $('f_condition').value || ''
     },
     updated: new Date().toISOString()
   };
@@ -786,9 +788,11 @@ function csvCell(v) {
   return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 function exportCSV() {
-  const cols = ['name', 'game', 'type', 'cost', 'power', 'rarity', 'price', 'qty', 'location'];
+  const cols = ['name', 'game', 'type', 'cost', 'power', 'rarity', 'condition', 'price', 'qty', 'location', 'tags'];
   const rows = [cols.join(',')];
-  cards.forEach(c => rows.push(cols.map(k => csvCell(k === 'tags' ? (c.tags || []).join('; ') : c[k])).join(',')));
+  cards.forEach(c => rows.push(cols.map(k =>
+    csvCell(k === 'tags' ? (c.tags || []).join('; ') : k === 'condition' ? (c.meta?.condition || '') : c[k])
+  ).join(',')));
   const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
